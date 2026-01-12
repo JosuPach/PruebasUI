@@ -42,6 +42,8 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
     @Published var delayE: Int
     @Published var targetD: Int
     @Published var targetC: Int
+    @Published var targetF: Int
+    @Published var targetG: Int
     @Published var shots: Int
     @Published var interval: Int
     @Published var isRunning: Bool = false
@@ -53,6 +55,8 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         delayE: Int = 500,
         targetD: Int = 127,
         targetC: Int = 127,
+        targetF: Int = 127,
+        targetG: Int = 127,
         shots: Int = 1,
         interval: Int = 1000
     ) {
@@ -62,6 +66,8 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         self.delayE = delayE
         self.targetD = targetD
         self.targetC = targetC
+        self.targetF = targetF
+        self.targetG = targetG
         self.shots = shots
         self.interval = interval
     }
@@ -74,6 +80,8 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
                   "B\(String(format: "%03d", speedAB))" +
                   "C\(String(format: "%03d", targetC))" +
                   "D\(String(format: "%03d", targetD))" +
+                  "F\(String(format: "%03d", targetF))" +
+                  "G\(String(format: "%03d", targetG))" +
                   "E\(String(format: "%04d", delayE))"
 
         return "[SHOT] \(shotNumber) \(cmd)"
