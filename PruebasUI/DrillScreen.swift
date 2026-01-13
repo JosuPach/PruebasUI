@@ -9,332 +9,280 @@ struct DrillScreen: View {
     var onAddShot: () -> Void
     var onDeleteShot: (Int) -> Void
 
-    // Estado UI
     @State private var loopCount: Int = 1
     @State private var isInfinite: Bool = false
     @State private var isRunning: Bool = false
-    @State private var scanlineOffset: CGFloat = 0
+    @State private var flowPhase: CGFloat = 0
 
-    // MARK: - Helpers
+    // MARK: - Lógica de Control y Comandos
+    
+    private func handleAddShot() {
+        onAddShot()
+    }
+
+    private func handleDeleteShot(at index: Int) {
+        onDeleteShot(index)
+        // La re-indexación ocurre en el componente padre, pero aquí nos aseguramos
+        // de que la UI se refresque correctamente.
+    }
+
     private func sendLoopCommand(_ count: Int) {
         let formatted = String(format: "%02d", min(max(count, 0), 99))
         communicator.sendCommand("[N\(formatted)]")
     }
 
-    private func buildConsolidatedShotsCommand() -> String {
-        let ordered = shots.values.sorted { $0.shotNumber < $1.shotNumber }
-        let joined = ordered.map { cfg in
-            String(format: "A%03d:B%03d:C%03d:D%03d:E%03d",
-                   cfg.speedAB, cfg.speedAB, cfg.targetC, cfg.targetD, cfg.delayE)
-        }.joined(separator: ":")
-        return joined
-    }
-
     private func startDrill() {
         guard communicator.isConnected else { return }
-        communicator.sendCommand("[MD]")
         let loopValue = isInfinite ? 255 : min(max(loopCount, 1), 255)
         let loopP = String(format: "%03d", loopValue)
-        let shotsCmd = buildConsolidatedShotsCommand()
-        let final = "[MD]P\(loopP):\(shotsCmd)[GO]"
-        communicator.sendCommand(final)
+        
+        // Ordenar tiros por número para asegurar secuencia lógica
+        let sortedShots = shots.values.sorted { $0.shotNumber < $1.shotNumber }
+        let shotsCmd = sortedShots.map { cfg in
+            String(format: "A%03d:B%03d:C%03d:D%03d:E%03d", cfg.speedAB, cfg.speedAB, cfg.targetC, cfg.targetD, cfg.delayE)
+        }.joined(separator: ":")
+        
+        communicator.sendCommand("[MD]P\(loopP):\(shotsCmd)[GO]")
         withAnimation { isRunning = true }
     }
 
     private func stopDrill() {
-        communicator.sendCommand("[Z]")
+        communicator.sendCommand("[STOP]")
         withAnimation { isRunning = false }
     }
 
     var body: some View {
         ZStack {
-            // Fondo Base
             Color.dragonBotBackground.ignoresSafeArea()
             
-            // Scanlines decorativos
-            GeometryReader { geo in
-                VStack(spacing: 2) {
-                    let lineCount = Int(geo.size.height / 4)
-                    ForEach(0..<lineCount, id: \.self) { _ in
-                        Rectangle()
-                            .fill(Color.white.opacity(0.015))
-                            .frame(height: 1)
-                    }
-                }
-            }.ignoresSafeArea()
-
             VStack(spacing: 0) {
-                // Custom Navigation Bar
+                // Header Superior
                 HStack {
                     Button(action: onBackClick) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                            Text("BACK")
-                        }
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(.dragonBotPrimary)
+                        Label("VOLVER", systemImage: "chevron.left")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(.dragonBotPrimary)
                     }
                     Spacer()
-                    Text("DRILL_SEQUENCE_EDITOR")
+                    Text("RED DE ENTRENAMIENTO")
                         .font(.system(size: 14, weight: .black, design: .monospaced))
-                        .foregroundColor(.white)
                     Spacer()
-                    Circle()
-                        .fill(communicator.isConnected ? Color.dragonBotPrimary : Color.dragonBotError)
-                        .frame(width: 8, height: 8)
-                        .shadow(color: communicator.isConnected ? .dragonBotPrimary : .dragonBotError, radius: 4)
+                    Circle().fill(communicator.isConnected ? Color.dragonBotPrimary : .red).frame(width: 8, height: 8)
                 }
                 .padding()
-                .background(Color.black.opacity(0.3))
+                .background(Color.black.opacity(0.5))
 
-                ScrollView {
-                    VStack(spacing: 24) {
+                // Panel de Control Fijo (Loops y Botones Maestros)
+                VStack(spacing: 15) {
+                    HStack(spacing: 12) {
+                        Button(action: { communicator.sendCommand("[Z]") }) {
+                            VStack {
+                                Image(systemName: "arrow.counterclockwise")
+                                Text("Z").font(.caption2).bold()
+                            }
+                            .frame(width: 50, height: 50)
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(12)
+                        }
                         
-                        // Panel de Control Superior (Loop Counter)
-                        VStack(spacing: 15) {
+                        Button(action: isRunning ? stopDrill : startDrill) {
                             HStack {
-                                Text("EXECUTION_CYCLES")
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.dragonBotSecondary)
-                                Spacer()
-                                if isInfinite {
-                                    Text("∞ INFINITE_MODE")
-                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                        .foregroundColor(.dragonBotPrimary)
+                                Image(systemName: isRunning ? "stop.fill" : "play.fill")
+                                Text(isRunning ? "STOP" : "INICIAR")
+                            }
+                            .font(.system(size: 16, weight: .black, design: .monospaced))
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .background(isRunning ? Color.red : Color.dragonBotPrimary)
+                            .foregroundColor(.black)
+                            .cornerRadius(12)
+                        }
+                    }
+
+                    // Contador de Bucle Restaurado
+                    HStack {
+                        Text("BUCLES:")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(.gray)
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 20) {
+                            Button(action: {
+                                if loopCount > 1 { loopCount -= 1; isInfinite = false; sendLoopCommand(loopCount) }
+                            }) {
+                                Image(systemName: "minus.square.fill").font(.title2)
+                            }
+                            
+                            Text(isInfinite ? "∞" : "\(loopCount)")
+                                .font(.system(size: 20, weight: .black, design: .monospaced))
+                                .frame(width: 40)
+                                .foregroundColor(.white)
+                            
+                            Button(action: {
+                                loopCount += 1; isInfinite = false; sendLoopCommand(loopCount)
+                            }) {
+                                Image(systemName: "plus.square.fill").font(.title2)
+                            }
+                            
+                            Button(action: {
+                                isInfinite.toggle()
+                                if isInfinite { communicator.sendCommand("[I]") } else { sendLoopCommand(loopCount) }
+                            }) {
+                                Text("INF")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .padding(8)
+                                    .background(isInfinite ? Color.dragonBotPrimary : Color.white.opacity(0.1))
+                                    .foregroundColor(isInfinite ? .black : .white)
+                                    .cornerRadius(8)
+                            }
+                        }
+                        .foregroundColor(.dragonBotPrimary)
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(12)
+                }
+                .padding()
+
+                // ScrollView de los Tiros
+                ScrollView(.vertical, showsIndicators: true) {
+                    ZStack(alignment: .topLeading) {
+                        let sortedKeys = shots.keys.sorted()
+                        
+                        // Línea de Conexión Animada
+                        if sortedKeys.count > 1 {
+                            DataLineView(count: sortedKeys.count, phase: flowPhase, isActive: isRunning)
+                                .padding(.top, 45) // Alinea con el primer círculo
+                        }
+
+                        VStack(spacing: 30) {
+                            ForEach(sortedKeys, id: \.self) { key in
+                                if let cfg = shots[key] {
+                                    DrillShotCard(
+                                        cfg: cfg,
+                                        onEdit: { onConfigShot(cfg.shotNumber) },
+                                        onDelete: { handleDeleteShot(at: cfg.shotNumber) }
+                                    )
                                 }
                             }
                             
-                            LoopCounter(
-                                loopCount: loopCount,
-                                isInfinite: isInfinite,
-                                onIncrement: {
-                                    loopCount += 1
-                                    isInfinite = false
-                                    sendLoopCommand(loopCount)
-                                },
-                                onDecrement: {
-                                    if loopCount > 1 {
-                                        loopCount -= 1
-                                        isInfinite = false
-                                        sendLoopCommand(loopCount)
-                                    }
-                                },
-                                onSetInfinite: {
-                                    isInfinite = true
-                                    communicator.sendCommand("[I]")
-                                },
-                                onSetFinite: {
-                                    isInfinite = false
-                                    sendLoopCommand(loopCount)
+                            // Botón Añadir Paso
+                            Button(action: handleAddShot) {
+                                HStack {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("AÑADIR TIRO \(shots.count + 1)")
                                 }
-                            )
-                        }
-                        .padding()
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-
-                        // Lista de Tiros
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack {
-                                Text("SEQUENCE_QUEUE")
-                                    .font(.system(size: 14, weight: .black, design: .monospaced))
-                                    .foregroundColor(.white)
-                                Spacer()
-                                Text("\(shots.count) UNITS")
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.dragonBotPrimary)
+                                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(RoundedRectangle(cornerRadius: 15).stroke(Color.dragonBotPrimary, lineWidth: 1))
+                                .foregroundColor(.dragonBotPrimary)
                             }
                             .padding(.horizontal)
-
-                            if shots.isEmpty {
-                                EmptyStateView(action: onAddShot)
-                            } else {
-                                ForEach(shots.keys.sorted(), id: \.self) { key in
-                                    if let cfg = shots[key] {
-                                        DrillShotCard(
-                                            cfg: cfg,
-                                            onEdit: { onConfigShot(cfg.shotNumber) },
-                                            onDelete: { onDeleteShot(cfg.shotNumber) }
-                                        )
-                                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                                    }
-                                }
-                                
-                                Button(action: onAddShot) {
-                                    HStack {
-                                        Image(systemName: "plus.circle.fill")
-                                        Text("APPEND_NEW_SHOT")
-                                    }
-                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.dragonBotPrimary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(RoundedRectangle(cornerRadius: 10).stroke(Color.dragonBotPrimary, lineWidth: 1))
-                                }
-                                .padding(.horizontal)
-                            }
+                            .padding(.bottom, 100)
                         }
-
-                        // Status Indicator si está corriendo
-                        if isRunning {
-                            HStack {
-                                Circle().fill(Color.dragonBotPrimary).frame(width: 8, height: 8)
-                                    .opacity(scanlineOffset)
-                                Text("SYSTEM_ACTIVE: EXECUTING_DRILL...")
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.dragonBotPrimary)
-                            }
-                            .padding()
-                            .onAppear {
-                                withAnimation(.easeInOut(duration: 0.8).repeatForever()) {
-                                    scanlineOffset = 1.0
-                                }
-                            }
-                        }
-                        
-                        Spacer(minLength: 100)
                     }
                     .padding(.vertical)
                 }
             }
-
-            // BOTONES DE ACCIÓN FLOTANTES (Sticky Bottom)
-            VStack {
-                Spacer()
-                HStack(spacing: 15) {
-                    if isRunning {
-                        Button(action: stopDrill) {
-                            HStack {
-                                Image(systemName: "stop.fill")
-                                Text("HALT_SYSTEM")
-                            }
-                            .font(.system(size: 16, weight: .black, design: .monospaced))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 20)
-                            .background(Color.dragonBotError)
-                            .foregroundColor(.white)
-                            .cornerRadius(15)
-                            .shadow(color: .dragonBotError.opacity(0.4), radius: 10)
-                        }
-                    } else {
-                        Button(action: startDrill) {
-                            HStack {
-                                Image(systemName: "play.fill")
-                                Text("INITIATE_DRILL")
-                            }
-                            .font(.system(size: 16, weight: .black, design: .monospaced))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 20)
-                            .background(shots.isEmpty ? Color.gray : Color.dragonBotPrimary)
-                            .foregroundColor(.black)
-                            .cornerRadius(15)
-                            .shadow(color: .dragonBotPrimary.opacity(0.3), radius: 10)
-                        }
-                        .disabled(shots.isEmpty)
-                    }
-                }
-                .padding()
-                .background(
-                    LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
-                )
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                flowPhase = 1.0
             }
         }
     }
 }
 
-// MARK: - Subcomponentes Visuales
+// MARK: - Componente Línea de Datos
+struct DataLineView: View {
+    let count: Int
+    let phase: CGFloat
+    let isActive: Bool
+    
+    var body: some View {
+        Rectangle()
+            .fill(Color.dragonBotPrimary.opacity(0.3))
+            .frame(width: 2)
+            .overlay(
+                GeometryReader { geo in
+                    VStack(spacing: 0) {
+                        ForEach(0..<count, id: \.self) { _ in
+                            Circle()
+                                .fill(isActive ? Color.white : Color.dragonBotPrimary)
+                                .frame(width: 6, height: 6)
+                                .shadow(color: .dragonBotPrimary, radius: 4)
+                                .offset(y: phase * 120) // Velocidad de flujo
+                        }
+                    }
+                    .mask(Rectangle().frame(height: geo.size.height))
+                }
+            )
+            .frame(width: 2)
+            .padding(.leading, 41) // Alineado con el centro del círculo de la tarjeta
+            .allowsHitTesting(false)
+    }
+}
 
+// MARK: - Tarjeta de Tiro Mejorada
 struct DrillShotCard: View {
     let cfg: ShotConfig
     var onEdit: () -> Void
     var onDelete: () -> Void
     
     var body: some View {
-        HStack(spacing: 0) {
-            // Indicador de número lateral
-            VStack {
-                Text("#")
-                    .font(.system(size: 10, weight: .bold))
+        HStack(spacing: 12) {
+            // Indicador de Número (Círculo Conector)
+            ZStack {
+                Circle()
+                    .fill(Color.dragonBotPrimary)
+                    .frame(width: 34, height: 34)
                 Text("\(cfg.shotNumber)")
-                    .font(.system(size: 18, weight: .black))
+                    .font(.system(size: 16, weight: .black, design: .monospaced))
+                    .foregroundColor(.black)
             }
-            .foregroundColor(.black)
-            .frame(width: 50)
-            .frame(maxHeight: .infinity)
-            .background(Color.dragonBotPrimary)
-            
-            VStack(alignment: .leading, spacing: 8) {
+            .frame(width: 44)
+            .zIndex(2)
+
+            // Contenido de la Tarjeta
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("SHOT_CONFIG_DATA")
+                    Text("TIRO\(cfg.shotNumber)")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(.dragonBotSecondary)
+                        .foregroundColor(.gray)
                     Spacer()
                     Button(action: onDelete) {
-                        Image(systemName: "xmark.square.fill")
-                            .foregroundColor(.dragonBotError.opacity(0.7))
+                        Image(systemName: "trash").font(.subheadline).foregroundColor(.red.opacity(0.8))
                     }
                 }
                 
-                HStack(spacing: 15) {
+                HStack {
                     VStack(alignment: .leading) {
-                        Label("PWR", systemImage: "bolt.fill")
-                        Text("\(cfg.speedAB)").font(.system(size: 16, weight: .bold, design: .monospaced))
+                        Text("VEL.").font(.system(size: 8)).foregroundColor(.gray)
+                        Text("\(cfg.speedAB)").font(.system(size: 14, weight: .bold))
                     }
-                    
-                    VStack(alignment: .leading) {
-                        Label("DLY", systemImage: "timer")
-                        Text("\(cfg.delayE)ms").font(.system(size: 16, weight: .bold, design: .monospaced))
-                    }
-                    
                     Spacer()
-                    
+                    VStack(alignment: .leading) {
+                        Text("RETARDO").font(.system(size: 8)).foregroundColor(.gray)
+                        Text("\(cfg.delayE)ms").font(.system(size: 14, weight: .bold))
+                    }
+                    Spacer()
                     Button(action: onEdit) {
-                        Text("EDIT")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 15)
-                            .padding(.vertical, 8)
-                            .background(Color.dragonBotPrimary.opacity(0.1))
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.dragonBotPrimary, lineWidth: 1))
+                        Text("AJUSTAR")
+                            .font(.system(size: 10, weight: .black))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.dragonBotPrimary)
+                            .foregroundColor(.black)
+                            .cornerRadius(6)
                     }
                 }
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.white)
             }
             .padding()
-            .background(Color.white.opacity(0.05))
+            .background(Color.white.opacity(0.08))
+            .cornerRadius(15)
+            .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.white.opacity(0.1), lineWidth: 1))
         }
-        .frame(height: 90)
-        .cornerRadius(10)
         .padding(.horizontal)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                .padding(.horizontal)
-        )
-    }
-}
-
-struct EmptyStateView: View {
-    var action: () -> Void
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "cpu")
-                .font(.system(size: 50))
-                .foregroundColor(.white.opacity(0.1))
-            Text("NO_SEQUENCE_LOADED")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.4))
-            Button(action: action) {
-                Text("CREATE_FIRST_SHOT")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .padding()
-                    .background(Color.dragonBotPrimary)
-                    .foregroundColor(.black)
-                    .cornerRadius(8)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
     }
 }

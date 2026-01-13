@@ -44,6 +44,7 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
     @Published var targetC: Int
     @Published var targetF: Int
     @Published var targetG: Int
+    @Published var targetH: Int
     @Published var shots: Int
     @Published var interval: Int
     @Published var isRunning: Bool = false
@@ -57,6 +58,7 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         targetC: Int = 127,
         targetF: Int = 127,
         targetG: Int = 127,
+        targetH: Int = 127,
         shots: Int = 1,
         interval: Int = 1000
     ) {
@@ -68,6 +70,7 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         self.targetC = targetC
         self.targetF = targetF
         self.targetG = targetG
+        self.targetH = targetH
         self.shots = shots
         self.interval = interval
     }
@@ -82,6 +85,7 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
                   "D\(String(format: "%03d", targetD))" +
                   "F\(String(format: "%03d", targetF))" +
                   "G\(String(format: "%03d", targetG))" +
+                  "H\(String(format: "%03d", targetH))" +
                   "E\(String(format: "%04d", delayE))"
 
         return "[SHOT] \(shotNumber) \(cmd)"
@@ -104,7 +108,11 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         let y = scaledTo99(self.targetD)
         let v1 = scaledTo99(self.speedAB)  // you said both wheels same value from slider
         let v2 = scaledTo99(self.speedAB)
-        return String(format: "[SH%02d%02d%02d%02d]", x, y, v1, v2)
+        let v3 = scaledTo99(self.delayE)
+        let v4 = scaledTo99(self.targetF)
+        let v5 = scaledTo99(self.targetG)
+        let v6 = scaledTo99(self.targetH)
+        return String(format: "[SH%02d%02d%02d%02d%02d%02d%02d%02d]", x, y, v1, v2,v3,v4,v5,v6)
     }
 
     // Optional: a method to update numeric fields from a short command decode (if needed)
@@ -124,6 +132,9 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
             delayE: self.delayE,
             targetD: self.targetD,
             targetC: self.targetC,
+            targetF: self.targetF,
+            targetG: self.targetG,
+            targetH: self.targetH,
             shots: self.shots,
             interval: self.interval
         )
@@ -137,6 +148,9 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         case delayE
         case targetD
         case targetC
+        case targetF
+        case targetG
+        case targetH
         case shots
         case interval
         case isRunning
@@ -151,6 +165,9 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         let delayE = try container.decode(Int.self, forKey: .delayE)
         let targetD = try container.decode(Int.self, forKey: .targetD)
         let targetC = try container.decode(Int.self, forKey: .targetC)
+        let targetF = try container.decode(Int.self, forKey: .targetF)
+        let targetG = try container.decode(Int.self, forKey: .targetG)
+        let targetH = try container.decode(Int.self, forKey: .targetH)
         let shots = try container.decode(Int.self, forKey: .shots)
         let interval = try container.decode(Int.self, forKey: .interval)
         let isRunning = try container.decodeIfPresent(Bool.self, forKey: .isRunning) ?? false
@@ -162,6 +179,9 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
             delayE: delayE,
             targetD: targetD,
             targetC: targetC,
+            targetF: targetF,
+            targetG: targetG,
+            targetH: targetH,
             shots: shots,
             interval: interval
         )
@@ -176,6 +196,9 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         try container.encode(self.delayE, forKey: .delayE)
         try container.encode(self.targetD, forKey: .targetD)
         try container.encode(self.targetC, forKey: .targetC)
+        try container.encode(self.targetF, forKey: .targetF)
+        try container.encode(self.targetG, forKey: .targetG)
+        try container.encode(self.targetH, forKey: .targetH)
         try container.encode(self.shots, forKey: .shots)
         try container.encode(self.interval, forKey: .interval)
         try container.encode(self.isRunning, forKey: .isRunning)
