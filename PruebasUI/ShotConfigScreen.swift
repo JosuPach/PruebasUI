@@ -100,8 +100,6 @@ struct ShotConfigScreen: View {
         let sh = "[SH\(xScaled),\(yScaled),\(v1Scaled),\(v2Scaled),\(feedScaled),\(cxScaled),\(cyScaled),\(ctScaled)]"
         
         print("COMANDO ESCALADO GENERADO: \(sh)")
-        
-        communicator.sendCommand(sh)
         onSaveConfig(shotConfig)
         dismiss()
     }
