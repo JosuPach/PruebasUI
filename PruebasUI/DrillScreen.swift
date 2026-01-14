@@ -58,11 +58,6 @@ struct DrillScreen: View {
             VStack(spacing: 0) {
                 // Header Superior
                 HStack {
-                    Button(action: onBackClick) {
-                        Label("VOLVER", systemImage: "chevron.left")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(.dragonBotPrimary)
-                    }
                     Spacer()
                     Text("RED DE ENTRENAMIENTO")
                         .font(.system(size: 14, weight: .black, design: .monospaced))

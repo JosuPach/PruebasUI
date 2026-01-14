@@ -1,291 +1,294 @@
 import SwiftUI
 
+// Estructura con lógica de escalado diferenciada por parámetro
+struct SwapConfig {
+    var x: Double = 127     // Target: 0-20
+    var y: Double = 127     // Target: 0-20
+    var power: Double = 127 // Target: 0-99
+    var feed: Double = 0    // Target: 0-99
+    var cx: Double = 127    // Target: 0-99
+    var cy: Double = 127    // Target: 0-99
+    var ct: Double = 127    // Target: -3000 a 3000
+    
+    private func scaleTo99(_ value: Double) -> Int {
+        Int(((value * 99.0) / 255.0).rounded())
+    }
+    
+    private func scaleTo20(_ value: Double) -> Int {
+        Int(((value * 20.0) / 255.0).rounded())
+    }
+    
+    private func scaleToCT(_ value: Double) -> Int {
+        let scaled = (value * 6000.0 / 255.0) - 3000.0
+        return Int(scaled.rounded())
+    }
+
+    func generateCommand() -> String {
+        let ix = scaleTo99(x)
+        let iy = scaleTo99(y)
+        let ip = scaleTo99(power)
+        let ifeed = scaleTo99(feed)
+        let icx = scaleTo20(cx)
+        let icy = scaleTo20(cy)
+        let ict = scaleToCT(ct)
+        
+        let cmd = "[Y\(ix),\(iy),\(ip),\(ip),\(ifeed),\(icx),\(icy),\(ict)]"
+        return cmd
+    }
+    
+    func getDisplayValue(for key: String, raw: Double) -> String {
+        switch key {
+        case "x", "y": return "\(scaleTo20(raw))"
+        case "ct": return "\(scaleToCT(raw))"
+        default: return "\(scaleTo99(raw))"
+        }
+    }
+}
+
 struct SwapConfigScreen: View {
     @ObservedObject var communicator: BLECommunicator
     @Environment(\.dismiss) var dismiss
     var onClose: () -> Void
 
-    // Estado para los valores de los dos tiros de Swap
-    @State private var swap1Speed: Double = 70
-    @State private var swap1Delay: Double = 99
-    @State private var swap2Speed: Double = 105
-    @State private var swap2Delay: Double = 0
-    
-    // Estado para el popup de edición
-    @State private var editingSwap: Int? = nil // nil, 1 o 2
-    @State private var tempSpeed: Double = 0
-    @State private var tempDelay: Double = 0
+    @State private var channel1 = SwapConfig()
+    @State private var channel2 = SwapConfig()
+    @State private var editingSwap: Int? = nil
+    @State private var tempConfig = SwapConfig()
 
     var body: some View {
         ZStack {
             Color.dragonBotBackground.ignoresSafeArea()
             
-            // Efecto de cuadrícula de fondo
-            VStack(spacing: 2) {
-                ForEach(0..<60, id: \.self) { _ in
-                    Rectangle().fill(Color.white.opacity(0.01)).frame(height: 1)
-                }
-            }.ignoresSafeArea()
-
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button(action: {
-                        onClose()
-                        dismiss()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                            Text("BACK")
-                        }
-                    }
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundColor(.dragonBotPrimary)
-                    
-                    Spacer()
-                    Text("SWAP_MODULE_v2.0")
-                        .font(.system(size: 14, weight: .black, design: .monospaced))
-                        .foregroundColor(.white)
-                    Spacer()
-                    
-                    // Status dot
-                    Circle()
-                        .fill(communicator.isConnected ? Color.dragonBotPrimary : Color.dragonBotError)
-                        .frame(width: 6, height: 6)
-                }
-                .padding()
-                .background(Color.black.opacity(0.4))
+                headerView
 
                 ScrollView {
                     VStack(spacing: 25) {
-                        
-                        // Panel Principal de Control
-                        VStack(spacing: 15) {
-                            actionButton(title: "ACTIVATE SWAP MODE [WA]", icon: "arrow.left.and.right.square", color: .blue) {
+                        VStack(spacing: 12) {
+                            actionButton(title: "MODO SWAP [WA]", icon: "bolt.horizontal.fill", color: .blue) {
+                                print("📡 Enviando comando de modo: [WA]")
                                 communicator.sendCommand("[WA]")
                             }
-                            
-                            actionButton(title: "EXECUTE SWAP SEQUENCE [PL]", icon: "play.fill", color: .dragonBotPrimary) {
+                            actionButton(title: "EJECUTAR [PL]", icon: "play.circle.fill", color: .dragonBotPrimary) {
+                                print("📡 Enviando comando de ejecución: [PL]")
                                 communicator.sendCommand("[PL]")
                             }
                         }
                         .padding(.horizontal)
                         .padding(.top, 20)
 
-                        // Sección de Configuración de Tiros
                         VStack(alignment: .leading, spacing: 15) {
-                            Text("SWAP_CHANNELS_CONFIGURATION")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            Text("CANALES_CONFIGURADOS")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
                                 .foregroundColor(.dragonBotSecondary)
                                 .padding(.horizontal)
 
-                            // CARD SWAP 1
-                            SwapShotCard(
-                                id: 1,
-                                speed: Int(swap1Speed),
-                                delay: Int(swap1Delay),
-                                color: .orange,
-                                onEdit: {
-                                    tempSpeed = swap1Speed
-                                    tempDelay = swap1Delay
-                                    editingSwap = 1
-                                },
-                                onSend: {
-                                    sendSwapCommand(id: 1, speed: swap1Speed, delay: swap1Delay)
-                                }
-                            )
-
-                            // CARD SWAP 2
-                            SwapShotCard(
-                                id: 2,
-                                speed: Int(swap2Speed),
-                                delay: Int(swap2Delay),
-                                color: .pink,
-                                onEdit: {
-                                    tempSpeed = swap2Speed
-                                    tempDelay = swap2Delay
-                                    editingSwap = 2
-                                },
-                                onSend: {
-                                    sendSwapCommand(id: 2, speed: swap2Speed, delay: swap2Delay)
-                                }
-                            )
+                            SwapShotCard(id: 1, config: channel1, color: .orange, onEdit: { openEditor(id: 1) }, onSend: { transmit(id: 1) })
+                            SwapShotCard(id: 2, config: channel2, color: .pink, onEdit: { openEditor(id: 2) }, onSend: { transmit(id: 2) })
                         }
                     }
-                    .padding(.bottom, 100)
+                    .padding(.bottom, 30)
                 }
             }
 
-            // POPUP DE EDICIÓN (MODAL)
             if let id = editingSwap {
-                Color.black.opacity(0.85)
-                    .ignoresSafeArea()
-                    .onTapGesture { editingSwap = nil }
-                
-                VStack(spacing: 25) {
-                    VStack(spacing: 5) {
-                        Text("EDIT_SWAP_CHANNEL_0\(id)")
-                            .font(.system(size: 16, weight: .black, design: .monospaced))
-                            .foregroundColor(.dragonBotPrimary)
-                        Rectangle().fill(Color.dragonBotPrimary).frame(height: 1)
-                    }
-                    
-                    VStack(spacing: 20) {
-                        // Sliders de configuración
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("CHANNEL_POWER: \(Int(tempSpeed))", systemImage: "bolt.fill")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white)
-                            Slider(value: $tempSpeed, in: 0...255, step: 1)
-                                .accentColor(.dragonBotPrimary)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("TRANSITION_DELAY: \(Int(tempDelay))", systemImage: "timer")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white)
-                            Slider(value: $tempDelay, in: 0...255, step: 1)
-                                .accentColor(.dragonBotPrimary)
-                        }
-                    }
-                    
-                    HStack(spacing: 15) {
-                        Button(action: { editingSwap = nil }) {
-                            Text("CANCEL")
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.white.opacity(0.1))
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                        }
-                        
-                        Button(action: {
-                            if id == 1 {
-                                swap1Speed = tempSpeed
-                                swap1Delay = tempDelay
-                            } else {
-                                swap2Speed = tempSpeed
-                                swap2Delay = tempDelay
-                            }
-                            editingSwap = nil
-                        }) {
-                            Text("COMMIT")
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.dragonBotPrimary)
-                                .foregroundColor(.black)
-                                .cornerRadius(8)
-                        }
-                    }
-                }
-                .padding(25)
-                .background(Color.dragonBotBackground)
-                .cornerRadius(15)
-                .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.dragonBotPrimary.opacity(0.5), lineWidth: 2))
-                .frame(maxWidth: 320)
-                .transition(.scale.combined(with: .opacity))
+                editorModal(id: id)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(10)
             }
         }
     }
 
-    // MARK: - Helper Functions
+    private var headerView: some View {
+        HStack {
+            Button(action: { onClose(); dismiss() }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.left")
+                    Text("VOLVER")
+                }
+            }
+            .font(.system(size: 13, weight: .bold, design: .monospaced))
+            .foregroundColor(.dragonBotPrimary)
+            Spacer()
+            Text("SWAP_CONTROL_CENTER")
+                .font(.system(size: 13, weight: .black, design: .monospaced))
+                .foregroundColor(.white)
+            Spacer()
+            Circle().fill(communicator.isConnected ? Color.dragonBotPrimary : .red).frame(width: 8, height: 8)
+        }
+        .padding()
+        .background(Color.black.opacity(0.8))
+    }
 
-    private func sendSwapCommand(id: Int, speed: Double, delay: Double) {
-        let s = String(format: "%03d", Int(speed))
-        let d = String(format: "%02d", Int(delay))
-        let cmd = "[Y\(s)992727\(d)0000]"
+    @ViewBuilder
+    private func editorModal(id: Int) -> some View {
+        ZStack {
+            Color.black.opacity(0.8).ignoresSafeArea()
+                .onTapGesture { editingSwap = nil }
+            
+            VStack(spacing: 0) {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text("CONFIGURACIÓN_AVANZADA")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.dragonBotSecondary)
+                        Text("CANAL_0\(id)")
+                            .font(.system(size: 18, weight: .black, design: .monospaced))
+                            .foregroundColor(.dragonBotPrimary)
+                    }
+                    Spacer()
+                    Button(action: { editingSwap = nil }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .padding()
+                .background(Color.white.opacity(0.05))
+
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: 24) {
+                        parameterGroup(title: "POTENCIA_Y_POSICIÓN") {
+                            parameterSlider(label: "POWER (0-99)", value: $tempConfig.power, id: "p")
+                            parameterSlider(label: "X_TARGET (0-20)", value: $tempConfig.x, id: "x")
+                            parameterSlider(label: "Y_TARGET (0-20)", value: $tempConfig.y, id: "y")
+                        }
+                        
+                        parameterGroup(title: "MOVIMIENTO_Y_CURVA") {
+                            parameterSlider(label: "FEED (0-99)", value: $tempConfig.feed, id: "f")
+                            parameterSlider(label: "CX_CURVE (0-99)", value: $tempConfig.cx, id: "cx")
+                            parameterSlider(label: "CY_CURVE (0-99)", value: $tempConfig.cy, id: "cy")
+                        }
+                        
+                        parameterGroup(title: "TEMPORIZACIÓN_ESPECIAL") {
+                            parameterSlider(label: "CT_CYCLE (-3000 a 3000)", value: $tempConfig.ct, id: "ct")
+                        }
+                        
+                        Spacer(minLength: 20)
+                    }
+                    .padding(20)
+                }
+                .frame(maxHeight: 450)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("VISTA_PREVIA_COMANDO")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(.dragonBotSecondary)
+                        Text(tempConfig.generateCommand())
+                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                            .foregroundColor(.dragonBotPrimary)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.black.opacity(0.4))
+                            .cornerRadius(8)
+                    }
+                    
+                    Button(action: { saveChanges(id: id) }) {
+                        Text("GUARDAR CONFIGURACIÓN")
+                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.dragonBotPrimary)
+                            .foregroundColor(.black)
+                            .cornerRadius(10)
+                    }
+                }
+                .padding(20)
+                .background(Color.dragonBotBackground)
+                .overlay(Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.1)), alignment: .top)
+            }
+            .background(Color.dragonBotBackground)
+            .cornerRadius(20)
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private func openEditor(id: Int) {
+        tempConfig = (id == 1) ? channel1 : channel2
+        editingSwap = id
+    }
+
+    private func saveChanges(id: Int) {
+        if id == 1 { channel1 = tempConfig }
+        else { channel2 = tempConfig }
+        editingSwap = nil
+        print("✅ Cambios guardados localmente para Canal \(id)")
+    }
+
+    private func transmit(id: Int) {
+        let config = (id == 1) ? channel1 : channel2
+        let command = config.generateCommand()
         
-        communicator.sendCommand(cmd)
-        print("Swap \(id) Command Sent: \(cmd)")
+        // PRINT DE DEPURACIÓN DETALLADO
+        print("-----------------------------------------")
+        print("📤 TRANSMITIENDO SWAP CANAL \(id)")
+        print("Raw (0-255): P:\(Int(config.power)), X:\(Int(config.x)), Y:\(Int(config.y)), CT:\(Int(config.ct))")
+        print("Comando Final: \(command)")
+        print("-----------------------------------------")
+        
+        communicator.sendCommand(command)
+    }
+
+    private func parameterGroup<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.dragonBotSecondary)
+            content()
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.03))
+        .cornerRadius(10)
+    }
+
+    private func parameterSlider(label: String, value: Binding<Double>, id: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label).font(.system(size: 10, design: .monospaced)).foregroundColor(.white.opacity(0.7))
+                Spacer()
+                Text(tempConfig.getDisplayValue(for: id, raw: value.wrappedValue))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(.dragonBotPrimary)
+            }
+            Slider(value: value, in: 0...255, step: 1).accentColor(.dragonBotPrimary)
+        }
     }
 
     private func actionButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack {
-                Image(systemName: icon)
-                Text(title)
-            }
-            .font(.system(size: 14, weight: .black, design: .monospaced))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background(color.opacity(0.15))
-            .foregroundColor(color)
-            .cornerRadius(10)
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(color.opacity(0.5), lineWidth: 1))
+            HStack { Image(systemName: icon); Text(title) }
+            .font(.system(size: 12, weight: .black, design: .monospaced))
+            .frame(maxWidth: .infinity).padding(.vertical, 14)
+            .background(color.opacity(0.15)).foregroundColor(color).cornerRadius(10)
         }
     }
 }
 
 struct SwapShotCard: View {
     let id: Int
-    let speed: Int
-    let delay: Int
+    let config: SwapConfig
     let color: Color
     var onEdit: () -> Void
     var onSend: () -> Void
     
     var body: some View {
         HStack(spacing: 0) {
-            // Lado Izquierdo: ID
-            VStack {
-                Text("CH")
-                Text("0\(id)")
-            }
-            .font(.system(size: 12, weight: .black, design: .monospaced))
-            .foregroundColor(.black)
-            .frame(width: 50)
-            .frame(maxHeight: .infinity)
-            .background(color)
+            VStack { Text("CH"); Text("0\(id)") }
+                .font(.system(size: 12, weight: .black, design: .monospaced))
+                .foregroundColor(.black).frame(width: 40).frame(maxHeight: .infinity).background(color)
             
-            // Centro: Info
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 20) {
-                    VStack(alignment: .leading) {
-                        Text("POWER")
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.dragonBotSecondary)
-                        Text("\(speed)")
-                            .font(.system(size: 18, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                    }
-                    VStack(alignment: .leading) {
-                        Text("DELAY")
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.dragonBotSecondary)
-                        Text("\(delay)")
-                            .font(.system(size: 18, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                    }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(config.generateCommand()).font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundColor(.white)
                     Spacer()
-                    
-                    // Botón Editar
                     Button(action: onEdit) {
-                        Image(systemName: "slider.horizontal.3")
-                            .padding(10)
-                            .background(Color.white.opacity(0.05))
-                            .clipShape(Circle())
-                            .foregroundColor(.white)
+                        Image(systemName: "pencil.circle.fill").font(.title3).foregroundColor(color)
                     }
                 }
-                
-                // Botón Enviar Específico
                 Button(action: onSend) {
-                    Text("TRANSMIT_DATA")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(color.opacity(0.2))
-                        .foregroundColor(color)
-                        .cornerRadius(4)
+                    Text("ENVIAR").font(.system(size: 10, weight: .black, design: .monospaced))
+                        .frame(maxWidth: .infinity).padding(.vertical, 6).background(color.opacity(0.2)).foregroundColor(color).cornerRadius(4)
                 }
-            }
-            .padding()
-            .background(Color.white.opacity(0.05))
-        }
-        .frame(height: 100)
-        .cornerRadius(12)
-        .padding(.horizontal)
+            }.padding(10).background(Color.white.opacity(0.05))
+        }.frame(height: 85).cornerRadius(10).padding(.horizontal)
     }
 }
