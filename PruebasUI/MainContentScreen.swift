@@ -1,6 +1,163 @@
 import SwiftUI
 import CoreBluetooth
 
+// MARK: - COMPONENTE: PATRÓN DE RED (GRID)
+struct GridPatternView: View {
+    var color: Color
+    var spacing: CGFloat = 15
+    
+    var body: some View {
+        Canvas { context, size in
+            // Líneas horizontales
+            for y in stride(from: 0, to: size.height, by: spacing) {
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                context.stroke(path, with: .color(color.opacity(0.15)), lineWidth: 0.5)
+            }
+            // Líneas verticales
+            for x in stride(from: 0, to: size.width, by: spacing) {
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+                context.stroke(path, with: .color(color.opacity(0.15)), lineWidth: 0.5)
+            }
+        }
+    }
+}
+
+// MARK: - GLASSY CONTAINER ACTUALIZADO (CON RED)
+struct GlassyContainer<Content: View>: View {
+    let color: Color
+    let content: Content
+    
+    init(color: Color, @ViewBuilder content: () -> Content) {
+        self.color = color
+        self.content = content()
+    }
+    
+    var body: some View {
+        ZStack {
+            // Fondo oscuro base
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.black.opacity(0.6))
+            
+            // LA RED: Patrón ilustrativo de fondo
+            GridPatternView(color: color, spacing: 12)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            // Brillo degradado sutil
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [color.opacity(0.1), .clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            
+            // Borde Neón
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    LinearGradient(
+                        colors: [color.opacity(0.6), color.opacity(0.1), color.opacity(0.4)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+            
+            content
+        }
+    }
+}
+
+// MARK: - BOTÓN DE NAVEGACIÓN REESTILIZADO
+struct NavButtonContent: View {
+    let label: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        GlassyContainer(color: color) {
+            HStack(spacing: 15) {
+                // Contenedor del icono con aura
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: 45, height: 45)
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(color)
+                        .shadow(color: color, radius: 5)
+                }
+                .padding(.leading, 15)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.system(size: 14, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                    Text("EXECUTE_SEQUENCE")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(color.opacity(0.6))
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right.square.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(color.opacity(0.5))
+                    .padding(.trailing, 15)
+            }
+            .padding(.vertical, 16)
+        }
+    }
+}
+
+// MARK: - BOTÓN DE CONFIGURACIÓN (CUADRADO) REESTILIZADO
+struct ConfigButton: View {
+    let label: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            GlassyContainer(color: color) {
+                VStack(spacing: 12) {
+                    // Indicador de "esquina activa" tipo HUD
+                    HStack {
+                        Rectangle()
+                            .fill(color)
+                            .frame(width: 10, height: 2)
+                        Spacer()
+                        Text("v1.0")
+                            .font(.system(size: 6, design: .monospaced))
+                            .foregroundColor(color.opacity(0.5))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 8)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 28))
+                        .foregroundColor(color)
+                        .shadow(color: color, radius: 8)
+                    
+                    Text(label)
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                        .tracking(1)
+                    
+                    Spacer(minLength: 8)
+                }
+                .frame(maxWidth: .infinity, minHeight: 110)
+            }
+        }
+    }
+}
+
+// Nota: El resto de tu MainContentScreen permanece igual,
+// ya que estas modificaciones sobreescriben la apariencia de los componentes que ya usas.
 // MARK: - MAIN CONTENT SCREEN
 struct MainContentScreen: View {
     @ObservedObject var communicator: BLECommunicator
@@ -411,63 +568,6 @@ struct TerminalButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
     }
 }
-
-// MARK: - COMPONENTES VISUALES (GLASSY)
-struct GlassyContainer<Content: View>: View {
-    let color: Color
-    let content: Content
-    init(color: Color, @ViewBuilder content: () -> Content) {
-        self.color = color
-        self.content = content()
-    }
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.black.opacity(0.5))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(LinearGradient(colors: [color.opacity(0.6), color.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5)
-                )
-            content
-        }
-    }
-}
-
-struct NavButtonContent: View {
-    let label: String
-    let icon: String
-    let color: Color
-    var body: some View {
-        GlassyContainer(color: color) {
-            HStack(spacing: 20) {
-                Image(systemName: icon).font(.system(size: 24)).foregroundColor(color).frame(width: 50)
-                Text(label).font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundColor(.white)
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 14)).foregroundColor(color.opacity(0.5)).padding(.trailing)
-            }
-            .padding(.vertical, 20)
-        }
-    }
-}
-
-struct ConfigButton: View {
-    let label: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            GlassyContainer(color: color) {
-                VStack(spacing: 12) {
-                    Image(systemName: icon).font(.system(size: 24)).foregroundColor(color)
-                    Text(label).font(.system(size: 11, weight: .black, design: .monospaced)).foregroundColor(.white)
-                }
-                .frame(maxWidth: .infinity, minHeight: 100)
-            }
-        }
-    }
-}
-
 struct ControlSection<Content: View>: View {
     let title: String
     let content: () -> Content

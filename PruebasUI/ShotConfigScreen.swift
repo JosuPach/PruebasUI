@@ -6,12 +6,15 @@ struct ShotConfigScreen: View {
     @ObservedObject var shotConfig: ShotConfig
     @ObservedObject var communicator: BLECommunicator
 
+    // Callbacks para sincronización con DrillScreen
     var onSaveConfig: (ShotConfig) -> Void
     var onCancel: () -> Void
 
+    // Valores maestros de la red de tiro
     let dValues: [Int] = [255, 127, 0]
     let cValues: [Int] = [0, 64, 127, 191, 255]
 
+    // Estados temporales para edición
     @State private var speedTemp: Double
     @State private var delayTemp: Double
     @State private var targetFTemp: Double
@@ -20,6 +23,7 @@ struct ShotConfigScreen: View {
     @State private var selectedRow: Int
     @State private var selectedCol: Int
     
+    // Backup para detección de cambios
     private let initialSpeed: Double
     private let initialDelay: Double
     private let initialF: Double
@@ -28,6 +32,7 @@ struct ShotConfigScreen: View {
     private let initialRow: Int
     private let initialCol: Int
     
+    // Animaciones y UI
     @State private var pulseAnim: CGFloat = 1.0
     @State private var showAbortConfirmation = false
     @State private var glitchOffset: CGFloat = 0
@@ -45,6 +50,7 @@ struct ShotConfigScreen: View {
         self.onSaveConfig = onSaveConfig
         self.onCancel = onCancel
 
+        // Inicializamos estados con valores actuales
         _speedTemp = State(initialValue: Double(shotConfig.speedAB))
         _delayTemp = State(initialValue: Double(shotConfig.delayE))
         _targetFTemp = State(initialValue: shotConfig.targetF)
@@ -56,6 +62,7 @@ struct ShotConfigScreen: View {
         _selectedRow = State(initialValue: row)
         _selectedCol = State(initialValue: col)
         
+        // Guardamos copia inicial
         self.initialSpeed = Double(shotConfig.speedAB)
         self.initialDelay = Double(shotConfig.delayE)
         self.initialF = shotConfig.targetF
@@ -65,14 +72,14 @@ struct ShotConfigScreen: View {
         self.initialCol = col
     }
 
-    // Helper para mapear rangos
-    private func mapValue(_ value: Double, from: ClosedRange<Double>, to: ClosedRange<Double>) -> Int {
-        let result = to.lowerBound + (to.upperBound - to.lowerBound) * (value - from.lowerBound) / (from.upperBound - from.lowerBound)
-        return Int(result.rounded())
+    // MARK: - Navegación
+    
+    private func navigateToDrills() {
+        dismiss()
     }
 
     private func saveConfigAndReturn() {
-        // Actualizar datos locales (formato 0-255 / 0-2000)
+        // 1. Persistir cambios en el objeto observado
         shotConfig.speedAB = Int(speedTemp.rounded())
         shotConfig.delayE = Int(delayTemp.rounded())
         shotConfig.targetF = targetFTemp.rounded()
@@ -81,27 +88,34 @@ struct ShotConfigScreen: View {
         shotConfig.targetD = dValues[selectedRow]
         shotConfig.targetC = cValues[selectedCol]
 
-        // --- ESCALADO PARA EL COMANDO ---
-        // 1, 2, 3, 4, 5 -> [0...99]
-        let xScaled = mapValue(Double(shotConfig.targetC), from: 0...255, to: 0...99)
-        let yScaled = mapValue(Double(shotConfig.targetD), from: 0...255, to: 0...99)
-        let v1Scaled = mapValue(speedTemp, from: 0...255, to: 0...99)
-        let v2Scaled = mapValue(speedTemp, from: 0...255, to: 0...99)
-        let feedScaled = mapValue(delayTemp, from: 0...2000, to: 0...99)
+        // 2. Generar y enviar comando de prueba (opcional)
+        let xS = mapValue(Double(shotConfig.targetC), from: 0...255, to: 0...99)
+        let yS = mapValue(Double(shotConfig.targetD), from: 0...255, to: 0...99)
+        let vS = mapValue(speedTemp, from: 0...255, to: 0...99)
+        let fS = mapValue(delayTemp, from: 0...2000, to: 0...99)
+        let cxS = mapValue(targetFTemp, from: 0...255, to: 0...20)
+        let cyS = mapValue(targetGTemp, from: 0...255, to: 0...20)
+        let ctS = mapValue(targetHTemp, from: 0...255, to: -3000...3000)
         
-        // 6, 7 -> [0...20]
-        let cxScaled = mapValue(targetFTemp, from: 0...255, to: 0...20)
-        let cyScaled = mapValue(targetGTemp, from: 0...255, to: 0...20)
+        let sh = "[SH\(xS),\(yS),\(vS),\(vS),\(fS),\(cxS),\(cyS),\(ctS)]"
+        print("DEBUG: Comando de test enviado: \(sh)")
+        communicator.sendCommand(sh)
         
-        // 8 -> [-3000...3000]
-        let ctScaled = mapValue(targetHTemp, from: 0...255, to: -3000...3000)
-        
-        // Formato: [SHx,y,v1,v2,feed,cx,cy,ct]
-        let sh = "[SH\(xScaled),\(yScaled),\(v1Scaled),\(v2Scaled),\(feedScaled),\(cxScaled),\(cyScaled),\(ctScaled)]"
-        
-        print("COMANDO ESCALADO GENERADO: \(sh)")
+        // 3. Callback y salida
         onSaveConfig(shotConfig)
-        dismiss()
+        navigateToDrills()
+    }
+
+    private func cancelAndReturn() {
+        onCancel()
+        navigateToDrills()
+    }
+
+    // MARK: - Helpers
+    
+    private func mapValue(_ value: Double, from: ClosedRange<Double>, to: ClosedRange<Double>) -> Int {
+        let result = to.lowerBound + (to.upperBound - to.lowerBound) * (value - from.lowerBound) / (from.upperBound - from.lowerBound)
+        return Int(result.rounded())
     }
 
     private var hasUnsavedChanges: Bool {
@@ -118,10 +132,25 @@ struct ShotConfigScreen: View {
         }
     }
 
+    private func triggerGlitch() {
+        confidence = Double.random(in: 0.92...0.99)
+        withAnimation(.interactiveSpring(response: 0.1, dampingFraction: 0.2)) {
+            glitchOffset = CGFloat.random(in: -3...3)
+            glitchOpacity = 0.8
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring()) {
+                glitchOffset = 0
+                glitchOpacity = 1.0
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
             Color.dragonBotBackground.ignoresSafeArea()
             
+            // Rejilla decorativa de fondo
             VStack(spacing: 2) {
                 ForEach(0..<100, id: \.self) { _ in
                     Rectangle().fill(Color.white.opacity(0.02)).frame(height: 1)
@@ -129,13 +158,15 @@ struct ShotConfigScreen: View {
             }.ignoresSafeArea().allowsHitTesting(false)
             
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
+                VStack(spacing: 25) {
+                    // Header
                     VStack(spacing: 4) {
                         Text("DRAGONBOT SYSTEM").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.dragonBotSecondary)
                         Text("CONFIG TIRO #\(shotConfig.shotNumber)").font(.system(size: 28, weight: .black, design: .monospaced)).foregroundColor(.white)
                     }
                     .padding(.top).offset(x: glitchOffset)
 
+                    // Área de Cancha
                     VStack(spacing: 15) {
                         Text(shotTypeDescription).font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundColor(.dragonBotPrimary).padding(.vertical, 6).padding(.horizontal, 12).background(Color.dragonBotPrimary.opacity(0.1)).cornerRadius(5).overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.dragonBotPrimary.opacity(0.5), lineWidth: 1))
                         
@@ -170,21 +201,27 @@ struct ShotConfigScreen: View {
                         .frame(height: 220).rotation3DEffect(.degrees(45), axis: (x: 1, y: 0, z: 0)).scaleEffect(0.9).opacity(glitchOpacity)
                     }
                     
+                    // Panel de Control
                     VStack(spacing: 12) {
                         ModernSlider(label: "VELOCIDAD MOTORES", value: $speedTemp, range: 0...255, icon: "bolt.fill") { triggerGlitch() }
-                        ModernSlider(label: "CADENCIA", value: $delayTemp, range: 0...2000, icon: "timer") { triggerGlitch() }
+                        ModernSlider(label: "CADENCIA (ms)", value: $delayTemp, range: 0...2000, icon: "timer") { triggerGlitch() }
                         ModernSlider(label: "CARRO X", value: $targetFTemp, range: 0...255, icon: "arrow.left.and.right") { triggerGlitch() }
                         ModernSlider(label: "CARRO Y", value: $targetGTemp, range: 0...255, icon: "arrow.up.and.down") { triggerGlitch() }
-                        ModernSlider(label: "CARRO T (ROTACIÓN -3000 a 3000)", value: $targetHTemp, range: 0...255, icon: "rotate.right") { triggerGlitch() }
+                        ModernSlider(label: "CARRO T (GIRO)", value: $targetHTemp, range: 0...255, icon: "rotate.right") { triggerGlitch() }
                     }
                     .padding(.horizontal)
 
+                    // Botones
                     HStack(spacing: 20) {
-                        Button(action: { if hasUnsavedChanges { showAbortConfirmation = true } else { onCancel(); dismiss() } }) {
-                            Text("CANCELAR").font(.system(size: 14, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(Color.dragonBotError.opacity(0.1)).foregroundColor(.dragonBotError).cornerRadius(12).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.dragonBotError, lineWidth: 1))
+                        Button(action: {
+                            if hasUnsavedChanges { showAbortConfirmation = true }
+                            else { cancelAndReturn() }
+                        }) {
+                            Text("CANCELAR").font(.system(size: 14, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(Color.red.opacity(0.1)).foregroundColor(.red).cornerRadius(12).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.red, lineWidth: 1))
                         }
+                        
                         Button(action: saveConfigAndReturn) {
-                            Text("GUARDAR Y ENVIAR").font(.system(size: 14, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(Color.dragonBotPrimary).foregroundColor(.black).cornerRadius(12)
+                            Text("GUARDAR").font(.system(size: 14, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(Color.dragonBotPrimary).foregroundColor(.black).cornerRadius(12)
                         }
                     }
                     .padding(.horizontal).padding(.bottom, 40)
@@ -196,42 +233,35 @@ struct ShotConfigScreen: View {
             }
         }
         .onAppear { withAnimation(.easeInOut(duration: 1.0).repeatForever()) { pulseAnim = 1.3 } }
+        .navigationBarHidden(true)
     }
 
-    private func triggerGlitch() {
-        confidence = Double.random(in: 0.92...0.99)
-        withAnimation(.interactiveSpring(response: 0.1, dampingFraction: 0.2)) {
-            glitchOffset = CGFloat.random(in: -3...3)
-            glitchOpacity = 0.8
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.spring()) { glitchOffset = 0; glitchOpacity = 1.0 }
-        }
-    }
-    
     private var abortPopup: some View {
         ZStack {
             Color.black.opacity(0.85).ignoresSafeArea()
             VStack(spacing: 20) {
-                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 40)).foregroundColor(.dragonBotError)
-                Text("CAMBIOS SIN GUARDAR").font(.system(size: 18, weight: .black, design: .monospaced)).foregroundColor(.white)
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 40)).foregroundColor(.red)
+                Text("CAMBIOS SIN GUARDAR").font(.system(size: 18, weight: .black, design: .monospaced)).foregroundColor(.white).multilineTextAlignment(.center)
+                
                 VStack(spacing: 12) {
                     Button(action: saveConfigAndReturn) {
                         Text("GUARDAR AHORA").font(.system(size: 14, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(Color.dragonBotPrimary).foregroundColor(.black).cornerRadius(8)
                     }
-                    Button(action: { onCancel(); dismiss() }) {
-                        Text("DESCARTAR").font(.system(size: 14, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(Color.dragonBotError.opacity(0.2)).foregroundColor(.dragonBotError).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.dragonBotError, lineWidth: 1))
+                    Button(action: cancelAndReturn) {
+                        Text("DESCARTAR CAMBIOS").font(.system(size: 14, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(Color.red.opacity(0.2)).foregroundColor(.red).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.red, lineWidth: 1))
                     }
                     Button(action: { showAbortConfirmation = false }) {
-                        Text("VOLVER").font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.white.opacity(0.4))
+                        Text("VOLVER A EDITAR").font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.white.opacity(0.4)).padding(.top, 5)
                     }
                 }
-            }.padding(30).background(Color.dragonBotBackground).cornerRadius(15).overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.dragonBotError.opacity(0.5), lineWidth: 2)).frame(maxWidth: 320)
+            }
+            .padding(30).background(Color.dragonBotBackground).cornerRadius(15).overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.red.opacity(0.5), lineWidth: 2)).frame(maxWidth: 320)
         }
     }
 }
 
-// MARK: - Auxiliares
+// MARK: - Componentes Visuales
+
 struct ModernSlider: View {
     let label: String; @Binding var value: Double; let range: ClosedRange<Double>; let icon: String; var onChange: () -> Void
     var body: some View {

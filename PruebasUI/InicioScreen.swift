@@ -15,6 +15,12 @@ struct InicioScreen: View {
     @State private var buttonOpacity: Double = 0.0
     @State private var showIntro = true
     
+    // Estados para la Intro Minimalista (Blanca)
+    @State private var introText: String = ""
+    @State private var introOpacity: Double = 1.0
+    @State private var logoOpacity: Double = 0.0
+    @State private var introBackground: Color = .white
+    
     // Estados para el Robot y Fondo
     @State private var robotRotationY: Double = 0
     @State private var gridPhase: CGFloat = 0
@@ -32,7 +38,7 @@ struct InicioScreen: View {
         "DESARROLLAMOS EL FUTURO"
     ]
     
-    // IA YOLO DETECTION (INESTABLE)
+    // IA YOLO DETECTION
     @State private var targetBasePos: CGPoint = .zero
     @State private var isTargetDetected = false
     @State private var currentLabel: String = "TARGET_BOT"
@@ -42,12 +48,34 @@ struct InicioScreen: View {
     
     @State private var scanLineY: CGFloat = 0
     let fullTitle = "DRAGONBOT"
+    let brandName = "REMSTEC"
 
     var body: some View {
         ZStack {
-            ToothlessTheme.deepBlack.ignoresSafeArea()
+            // Fondo base que cambia según el estado
+            (showIntro ? Color.white : ToothlessTheme.deepBlack)
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 1.0), value: showIntro)
             
-            if !showIntro {
+            if showIntro {
+                // MARK: - CAPA DE INTRO (FONDO BLANCO / LETRAS NEGRAS)
+                VStack(spacing: 30) {
+                    Text(introText)
+                        .font(.system(size: 38, weight: .light, design: .monospaced))
+                        .tracking(12)
+                        .foregroundColor(.black) // Letras negras
+                    
+                    Image("Rems2") // Tu logo de empresa
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 130, height: 130)
+                        .opacity(logoOpacity)
+                        .grayscale(1.0) // Opcional: para que el logo también sea minimalista
+                }
+                .opacity(introOpacity)
+                
+            } else {
+                // MARK: - VISTA PRINCIPAL (FONDO NEGRO / CONTENIDO ORIGINAL)
                 ZStack {
                     StarFieldView()
                     
@@ -66,7 +94,6 @@ struct InicioScreen: View {
                             }
                         }
 
-                    // Línea de Escaneo
                     Rectangle()
                         .fill(LinearGradient(colors: [.clear, ToothlessTheme.plasmaBlue.opacity(0.2), .clear], startPoint: .top, endPoint: .bottom))
                         .frame(height: 2)
@@ -77,7 +104,6 @@ struct InicioScreen: View {
                             }
                         }
 
-                    // Cuadro de Detección YOLO Inestable
                     if isTargetDetected {
                         YOLOBoundingBox(
                             basePos: targetBasePos,
@@ -89,12 +115,8 @@ struct InicioScreen: View {
                     }
                 }
                 .transition(.opacity)
-            }
 
-            // CAPA DE INTERFAZ
-            VStack(spacing: 0) {
-                if !showIntro {
-                    // HEADER
+                VStack(spacing: 0) {
                     VStack(spacing: 12) {
                         Text(animatedText)
                             .font(.system(size: 55, weight: .black, design: .monospaced)).italic()
@@ -111,7 +133,6 @@ struct InicioScreen: View {
                     }
                     .padding(.top, 60)
                     
-                    // ROBOT CENTRAL
                     ZStack {
                         Ellipse()
                             .fill(Color.black.opacity(0.7))
@@ -131,7 +152,6 @@ struct InicioScreen: View {
                     
                     Spacer()
                     
-                    // BOTÓN PRINCIPAL
                     Button(action: onStartClick) {
                         Text("INICIAR ENTRENAMIENTO")
                             .font(.system(size: 13, weight: .black, design: .monospaced))
@@ -149,7 +169,6 @@ struct InicioScreen: View {
                     .opacity(buttonOpacity)
                     .padding(.bottom, 40)
 
-                    // PIE DE PÁGINA (REDES Y COPYRIGHT)
                     VStack(spacing: 20) {
                         HStack(spacing: 35) {
                             SocialLinkView(icon: "safari.fill", title: "REMSTEC.COM", url: "https://remstec.com")
@@ -167,17 +186,40 @@ struct InicioScreen: View {
                 }
             }
             
-            HUDCorners().stroke(Color.white.opacity(0.15), lineWidth: 1.0).ignoresSafeArea()
+            HUDCorners().stroke((showIntro ? Color.black.opacity(0.1) : Color.white.opacity(0.15)), lineWidth: 1.0).ignoresSafeArea()
         }
-        .onAppear { runProfessionalIntro() }
+        .onAppear { runFullSequence() }
     }
 
-    func runProfessionalIntro() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeInOut(duration: 0.8)) { showIntro = false }
-            startLogoTypingEffect()
-            startYOLOSimulation()
-            startSubtitleCycle()
+    // MARK: - LÓGICA DE ANIMACIÓN
+    func runFullSequence() {
+        // 1. Efecto de escritura REMSTEC
+        for (index, character) in brandName.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5 + Double(index) * 0.12) {
+                introText.append(character)
+            }
+        }
+        
+        // 2. Aparece Logo
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            withAnimation(.easeIn(duration: 0.8)) {
+                logoOpacity = 1.0
+            }
+        }
+        
+        // 3. Desvanecimiento y cambio a vista principal
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            withAnimation(.easeInOut(duration: 1.2)) {
+                introOpacity = 0.0
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                showIntro = false
+                // Lanzar animaciones originales
+                startLogoTypingEffect()
+                startYOLOSimulation()
+                startSubtitleCycle()
+            }
         }
     }
 
@@ -205,23 +247,18 @@ struct InicioScreen: View {
         }
     }
 
-    // SIMULACIÓN YOLO V8 CON JITTER
     func startYOLOSimulation() {
-        // Timer para cambiar la posición del objetivo
         Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
             let w = UIScreen.main.bounds.width
             let h = UIScreen.main.bounds.height
             targetBasePos = CGPoint(x: CGFloat.random(in: 60...w-60), y: CGFloat.random(in: 250...h-250))
             currentLabel = ["DRAGON_BOT", "REMS_UNIT", "AI_TARGET"][Int.random(in: 0...2)]
             isTargetDetected = true
-            
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { isTargetDetected = false }
         }
         
-        // Timer de alta frecuencia para el "Jitter" (inestabilidad visual)
         Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
             if isTargetDetected {
-                // Pequeñas variaciones aleatorias
                 jitterPos = CGSize(width: CGFloat.random(in: -3...3), height: CGFloat.random(in: -3...3))
                 jitterScale = CGFloat.random(in: 0.97...1.03)
                 confidence = Double.random(in: 0.94...0.99)
