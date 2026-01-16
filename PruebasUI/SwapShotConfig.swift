@@ -54,6 +54,9 @@ struct SwapConfigScreen: View {
     @State private var channel2 = SwapConfig()
     @State private var editingSwap: Int? = nil
     @State private var tempConfig = SwapConfig()
+    
+    // Estado para el popup de instrucciones
+    @State private var showInstructions: Bool = false
 
     var body: some View {
         ZStack {
@@ -65,12 +68,10 @@ struct SwapConfigScreen: View {
                 ScrollView {
                     VStack(spacing: 25) {
                         VStack(spacing: 12) {
-                            actionButton(title: "MODO SWAP [WA]", icon: "bolt.horizontal.fill", color: .blue) {
-                                print("📡 Enviando comando de modo: [WA]")
+                            actionButton(title: "MODO SWAP", icon: "bolt.horizontal.fill", color: .blue) {
                                 communicator.sendCommand("[WA]")
                             }
-                            actionButton(title: "EJECUTAR [PL]", icon: "play.circle.fill", color: .dragonBotPrimary) {
-                                print("📡 Enviando comando de ejecución: [PL]")
+                            actionButton(title: "EJECUTAR", icon: "play.circle.fill", color: .dragonBotPrimary) {
                                 communicator.sendCommand("[PL]")
                             }
                         }
@@ -91,10 +92,16 @@ struct SwapConfigScreen: View {
                 }
             }
 
+            // Modal de edición
             if let id = editingSwap {
                 editorModal(id: id)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(10)
+            }
+            
+            // Popup de Instrucciones
+            if showInstructions {
+                instructionsPopup
             }
         }
     }
@@ -109,15 +116,82 @@ struct SwapConfigScreen: View {
             }
             .font(.system(size: 13, weight: .bold, design: .monospaced))
             .foregroundColor(.dragonBotPrimary)
+            
             Spacer()
-            Text("SWAP_CONTROL_CENTER")
+            
+            Text("CONTROL SWAP")
                 .font(.system(size: 13, weight: .black, design: .monospaced))
                 .foregroundColor(.white)
+            
             Spacer()
+            
+            // Botón de Ayuda
+            Button(action: { withAnimation(.spring()) { showInstructions = true } }) {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(.dragonBotPrimary)
+            }
+            .padding(.trailing, 8)
+
             Circle().fill(communicator.isConnected ? Color.dragonBotPrimary : .red).frame(width: 8, height: 8)
         }
         .padding()
         .background(Color.black.opacity(0.8))
+    }
+
+    // MARK: - Popup de Instrucciones Swap
+    private var instructionsPopup: some View {
+        ZStack {
+            Color.black.opacity(0.85).ignoresSafeArea()
+                .onTapGesture { withAnimation { showInstructions = false } }
+            
+            VStack(spacing: 24) {
+                VStack(spacing: 8) {
+                    Image(systemName: "arrow.left.and.right.square.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(.dragonBotPrimary)
+                    Text("MODO SWAP (INTERCAMBIO)")
+                        .font(.system(size: 16, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 18) {
+                    instructionItem(icon: "1.circle.fill", title: "CARGAR CANALES", desc: "Configura CH01 y CH02. Pulsa 'ENVIAR' en cada uno para que el robot guarde ambos objetivos.")
+                    
+                    instructionItem(icon: "bolt.fill", title: "ACTIVAR MODO [WA]", desc: "Antes de empezar, pulsa el botón azul para poner el robot en espera de intercambio.")
+                    
+                    instructionItem(icon: "play.fill", title: "EJECUTAR [PL]", desc: "Pulsa EJECUTAR para disparar. El robot alternará entre el Canal 1 y el Canal 2 automáticamente.")
+                }
+                .padding(.vertical, 10)
+                
+                Button(action: { withAnimation { showInstructions = false } }) {
+                    Text("ENTENDIDO")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.dragonBotPrimary)
+                        .foregroundColor(.black)
+                        .cornerRadius(10)
+                }
+            }
+            .padding(30)
+            .background(Color.dragonBotBackground)
+            .cornerRadius(20)
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.dragonBotPrimary.opacity(0.3), lineWidth: 1))
+            .frame(maxWidth: 340)
+        }
+    }
+
+    private func instructionItem(icon: String, title: String, desc: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.dragonBotPrimary)
+                .font(.system(size: 20))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.white)
+                Text(desc).font(.system(size: 11)).foregroundColor(.white.opacity(0.6)).lineLimit(3)
+            }
+        }
     }
 
     @ViewBuilder
@@ -149,19 +223,19 @@ struct SwapConfigScreen: View {
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(spacing: 24) {
                         parameterGroup(title: "POTENCIA_Y_POSICIÓN") {
-                            parameterSlider(label: "POWER (0-99)", value: $tempConfig.power, id: "p")
-                            parameterSlider(label: "X_TARGET (0-20)", value: $tempConfig.x, id: "x")
-                            parameterSlider(label: "Y_TARGET (0-20)", value: $tempConfig.y, id: "y")
+                            parameterSlider(label: "VELOCIDAD DE LANZAMIENTO (0-99)", value: $tempConfig.power, id: "p")
+                            parameterSlider(label: "ALTA (0-20)", value: $tempConfig.x, id: "x")
+                            parameterSlider(label: "BAJA (0-20)", value: $tempConfig.y, id: "y")
                         }
                         
                         parameterGroup(title: "MOVIMIENTO_Y_CURVA") {
-                            parameterSlider(label: "FEED (0-99)", value: $tempConfig.feed, id: "f")
-                            parameterSlider(label: "CX_CURVE (0-99)", value: $tempConfig.cx, id: "cx")
-                            parameterSlider(label: "CY_CURVE (0-99)", value: $tempConfig.cy, id: "cy")
+                            parameterSlider(label: "CADENCIA (0-99)", value: $tempConfig.feed, id: "f")
+                            parameterSlider(label: "Cartrack-X (0-99)", value: $tempConfig.cx, id: "cx")
+                            parameterSlider(label: "Cartrack-Y (0-99)", value: $tempConfig.cy, id: "cy")
                         }
                         
-                        parameterGroup(title: "TEMPORIZACIÓN_ESPECIAL") {
-                            parameterSlider(label: "CT_CYCLE (-3000 a 3000)", value: $tempConfig.ct, id: "ct")
+                        parameterGroup(title: "GIRO") {
+                            parameterSlider(label: "Ángulo de giro de Cartrack (-3000 a 3000)", value: $tempConfig.ct, id: "ct")
                         }
                         
                         Spacer(minLength: 20)
@@ -213,20 +287,11 @@ struct SwapConfigScreen: View {
         if id == 1 { channel1 = tempConfig }
         else { channel2 = tempConfig }
         editingSwap = nil
-        print("✅ Cambios guardados localmente para Canal \(id)")
     }
 
     private func transmit(id: Int) {
         let config = (id == 1) ? channel1 : channel2
         let command = config.generateCommand()
-        
-        // PRINT DE DEPURACIÓN DETALLADO
-        print("-----------------------------------------")
-        print("📤 TRANSMITIENDO SWAP CANAL \(id)")
-        print("Raw (0-255): P:\(Int(config.power)), X:\(Int(config.x)), Y:\(Int(config.y)), CT:\(Int(config.ct))")
-        print("Comando Final: \(command)")
-        print("-----------------------------------------")
-        
         communicator.sendCommand(command)
     }
 

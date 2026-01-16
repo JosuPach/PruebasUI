@@ -19,6 +19,9 @@ struct DrillScreen: View {
     @State private var currentLoop: Int = 0
     @State private var countdownValue: Int = 0
     @State private var timerSubscription: Timer?
+    
+    // Estado para el popup de instrucciones
+    @State private var showInstructions: Bool = false
 
     // Mapeo manual de configuración a comando de texto [SH...]
     private func generateCommand(for cfg: ShotConfig) -> String {
@@ -35,30 +38,20 @@ struct DrillScreen: View {
     }
 
     private func startDrill() {
-        guard communicator.isConnected && !shots.isEmpty else {
-            print("DEBUG: No se puede iniciar. Conectado: \(communicator.isConnected), Tiros: \(shots.count)")
-            return
-        }
+        guard communicator.isConnected && !shots.isEmpty else { return }
         
-        // 1. Configurar modo de repetición PRIMERO
         if isInfinite {
-            print("DEBUG: 1. Modo Infinito [I]")
             communicator.sendCommand("[I]")
         } else {
             let loopCmd = String(format: "[N%02d]", loopCount)
-            print("DEBUG: 1. Modo Bucles \(loopCmd)")
             communicator.sendCommand(loopCmd)
         }
         
-        // 2. Enviar disparador de inicio DESPUÉS
-        print("DEBUG: 2. Enviando disparador [GO]")
         communicator.sendCommand("[GO]")
         
         withAnimation { isRunning = true }
         currentShotIndex = 0
         currentLoop = 0
-        
-        // El primer tiro se dispara inmediatamente al iniciar (countdown 0)
         countdownValue = 0
         
         let sortedShots = shots.values.sorted { $0.shotNumber < $1.shotNumber }
@@ -70,22 +63,14 @@ struct DrillScreen: View {
                 if currentShotIndex < sortedShots.count {
                     let config = sortedShots[currentShotIndex]
                     let command = generateCommand(for: config)
-                    
-                    print("DEBUG: Enviando Tiro \(config.shotNumber) -> \(command)")
                     communicator.sendCommand(command)
-                    
                     currentShotIndex += 1
-                    // Reiniciamos el contador visual según el intervalo seleccionado
                     countdownValue = Int(intervalSeconds)
                 } else {
                     currentLoop += 1
-                    print("DEBUG: Fin de bucle \(currentLoop)")
-                    
                     if isInfinite || currentLoop < loopCount {
                         currentShotIndex = 0
-                        // No reseteamos countdownValue aquí para que el intervalo se mantenga entre el último tiro del bucle y el primero del siguiente
                     } else {
-                        print("DEBUG: Secuencia completada totalmente.")
                         stopDrill()
                     }
                 }
@@ -94,7 +79,6 @@ struct DrillScreen: View {
     }
 
     private func stopDrill() {
-        print("DEBUG: Deteniendo Drill y enviando [STOP]")
         timerSubscription?.invalidate()
         timerSubscription = nil
         communicator.sendCommand("[STOP]")
@@ -110,24 +94,48 @@ struct DrillScreen: View {
 
         ZStack {
             Color.dragonBotBackground.ignoresSafeArea()
+            
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button(action: onBackClick) { Image(systemName: "chevron.left").foregroundColor(.white) }
+                // Header con Botón de Ayuda
+                HStack(spacing: 15) {
+                    Button(action: onBackClick) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    
+                    Text("RED DE ENTRENAMIENTO")
+                        .font(.system(size: 14, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                    
                     Spacer()
-                    Text("RED DE ENTRENAMIENTO").font(.system(size: 14, weight: .black, design: .monospaced))
-                    Spacer()
-                    Circle().fill(communicator.isConnected ? Color.dragonBotPrimary : .red).frame(width: 8, height: 8)
+                    
+                    // Botón de Ayuda Manual
+                    Button(action: { withAnimation(.spring()) { showInstructions = true } }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "questionmark.circle")
+                            Text("AYUDA").font(.system(size: 9, weight: .bold, design: .monospaced))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color.dragonBotPrimary.opacity(0.1))
+                        .foregroundColor(.dragonBotPrimary)
+                        .cornerRadius(6)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.dragonBotPrimary.opacity(0.4), lineWidth: 1))
+                    }
+                    
+                    Circle()
+                        .fill(communicator.isConnected ? Color.dragonBotPrimary : .red)
+                        .frame(width: 8, height: 8)
+                        .shadow(color: communicator.isConnected ? Color.dragonBotPrimary : .red, radius: 4)
                 }
-                .padding().background(Color.black.opacity(0.5))
+                .padding()
+                .background(Color.black.opacity(0.5))
 
                 // Panel Control
                 VStack(spacing: 15) {
                     HStack(spacing: 12) {
-                        Button(action: {
-                            print("DEBUG: Modo Drill [MD]")
-                            communicator.sendCommand("[MD]")
-                        }) {
+                        Button(action: { communicator.sendCommand("[MD]") }) {
                             VStack(spacing: 4) {
                                 Image(systemName: "target")
                                 Text("MODO DRILL").font(.system(size: 8, weight: .bold))
@@ -148,9 +156,7 @@ struct DrillScreen: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 8).background(Color.white.opacity(0.05))
                         .cornerRadius(12).opacity(isInfinite ? 0.3 : 1.0).disabled(isInfinite || isRunning)
 
-                        Button(action: {
-                            isInfinite.toggle()
-                        }) {
+                        Button(action: { isInfinite.toggle() }) {
                             VStack(spacing: 4) {
                                 Image(systemName: "infinity").font(.system(size: 18, weight: .bold))
                                     .foregroundColor(isInfinite ? .dragonBotPrimary : .gray)
@@ -163,10 +169,7 @@ struct DrillScreen: View {
                     }
 
                     HStack(spacing: 12) {
-                        Button(action: {
-                            print("DEBUG: Reiniciando motores [Z]")
-                            communicator.sendCommand("[Z]")
-                        }) {
+                        Button(action: { communicator.sendCommand("[Z]") }) {
                             VStack { Image(systemName: "arrow.counterclockwise"); Text("Z").font(.caption2).bold() }
                             .frame(width: 50, height: 50).background(Color.white.opacity(0.1)).cornerRadius(12)
                         }.disabled(isRunning)
@@ -193,7 +196,7 @@ struct DrillScreen: View {
 
                     VStack(spacing: 5) {
                         HStack {
-                            Text("INTERVALO DE TIRO:").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.gray)
+                            Text("INTERVALO ENTRE TIROS:").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.gray)
                             Spacer()
                             Text("\(Int(intervalSeconds))s").font(.system(size: 14, weight: .black)).foregroundColor(.dragonBotPrimary)
                         }
@@ -217,7 +220,6 @@ struct DrillScreen: View {
                                 DrillShotCard(cfg: cfg, isCurrent: isCurrent, onEdit: {
                                     onConfigShot(cfg.shotNumber)
                                 }, onDelete: {
-                                    print("DEBUG: Eliminando tiro [X]")
                                     communicator.sendCommand("[X]")
                                     onDeleteShot(cfg.shotNumber)
                                 })
@@ -234,11 +236,74 @@ struct DrillScreen: View {
                     }.padding(.vertical)
                 }
             }
+            
+            // Popup de Instrucciones
+            if showInstructions {
+                instructionsPopup
+            }
         }
         .onAppear { withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { flowPhase = 1.0 } }
+        .navigationBarHidden(true)
+    }
+    
+    // MARK: - Popup de Instrucciones
+    
+    private var instructionsPopup: some View {
+        ZStack {
+            Color.black.opacity(0.85).ignoresSafeArea()
+                .onTapGesture { withAnimation { showInstructions = false } }
+            
+            VStack(spacing: 24) {
+                VStack(spacing: 8) {
+                    Image(systemName: "list.bullet.rectangle.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(.dragonBotPrimary)
+                    Text("GESTIÓN DE SECUENCIAS")
+                        .font(.system(size: 18, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 18) {
+                    instructionItem(icon: "plus.square.dashed", title: "CREAR SECUENCIA", desc: "Añade múltiples tiros. Cada uno puede tener una dirección y velocidad diferente, son ilimitados. Además puedes editarlos las veces que quieras, pon a prueba tus habilidades.")
+                    
+                    instructionItem(icon: "arrow.3.trianglepath", title: "REPETICIÓN", desc: "Define cuántas veces quieres que se repita la lista completa de tiros o activa el modo infinito.")
+                    
+                    instructionItem(icon: "clock.fill", title: "TIEMPO DE REACCIÓN", desc: "El 'Intervalo' ajusta los segundos de descanso entre cada tiro de la secuencia.")
+                    
+                    instructionItem(icon: "play.fill", title: "Iniciar Secuencia", desc: "Iniciar Secuencia solo funcionará si activaste primero modo con el botón de Modo Drill")
+                }
+                .padding(.vertical, 10)
+                
+                Button(action: { withAnimation { showInstructions = false } }) {
+                    Text("ENTENDIDO")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.dragonBotPrimary)
+                        .foregroundColor(.black)
+                        .cornerRadius(10)
+                }
+            }
+            .padding(30)
+            .background(Color.dragonBotBackground)
+            .cornerRadius(20)
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.dragonBotPrimary.opacity(0.3), lineWidth: 1))
+            .frame(maxWidth: 340)
+        }
+    }
+
+    private func instructionItem(icon: String, title: String, desc: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.dragonBotPrimary)
+                .font(.system(size: 20))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.white)
+                Text(desc).font(.system(size: 11)).foregroundColor(.white.opacity(0.6)).lineLimit(3)
+            }
+        }
     }
 }
-
 // MARK: - Componentes Visuales
 
 struct DataLineView: View {

@@ -35,6 +35,7 @@ struct ShotConfigScreen: View {
     // Animaciones y UI
     @State private var pulseAnim: CGFloat = 1.0
     @State private var showAbortConfirmation = false
+    @State private var showInstructions = false
     @State private var glitchOffset: CGFloat = 0
     @State private var glitchOpacity: Double = 1.0
     @State private var confidence: Double = 0.98
@@ -50,7 +51,6 @@ struct ShotConfigScreen: View {
         self.onSaveConfig = onSaveConfig
         self.onCancel = onCancel
 
-        // Inicializamos estados con valores actuales
         _speedTemp = State(initialValue: Double(shotConfig.speedAB))
         _delayTemp = State(initialValue: Double(shotConfig.delayE))
         _targetFTemp = State(initialValue: shotConfig.targetF)
@@ -62,7 +62,6 @@ struct ShotConfigScreen: View {
         _selectedRow = State(initialValue: row)
         _selectedCol = State(initialValue: col)
         
-        // Guardamos copia inicial
         self.initialSpeed = Double(shotConfig.speedAB)
         self.initialDelay = Double(shotConfig.delayE)
         self.initialF = shotConfig.targetF
@@ -79,7 +78,6 @@ struct ShotConfigScreen: View {
     }
 
     private func saveConfigAndReturn() {
-        // 1. Persistir cambios en el objeto observado
         shotConfig.speedAB = Int(speedTemp.rounded())
         shotConfig.delayE = Int(delayTemp.rounded())
         shotConfig.targetF = targetFTemp.rounded()
@@ -88,7 +86,6 @@ struct ShotConfigScreen: View {
         shotConfig.targetD = dValues[selectedRow]
         shotConfig.targetC = cValues[selectedCol]
 
-        // 2. Generar y enviar comando de prueba (opcional)
         let xS = mapValue(Double(shotConfig.targetC), from: 0...255, to: 0...99)
         let yS = mapValue(Double(shotConfig.targetD), from: 0...255, to: 0...99)
         let vS = mapValue(speedTemp, from: 0...255, to: 0...99)
@@ -98,10 +95,8 @@ struct ShotConfigScreen: View {
         let ctS = mapValue(targetHTemp, from: 0...255, to: -3000...3000)
         
         let sh = "[SH\(xS),\(yS),\(vS),\(vS),\(fS),\(cxS),\(cyS),\(ctS)]"
-        print("DEBUG: Comando de test enviado: \(sh)")
         communicator.sendCommand(sh)
         
-        // 3. Callback y salida
         onSaveConfig(shotConfig)
         navigateToDrills()
     }
@@ -111,8 +106,6 @@ struct ShotConfigScreen: View {
         navigateToDrills()
     }
 
-    // MARK: - Helpers
-    
     private func mapValue(_ value: Double, from: ClosedRange<Double>, to: ClosedRange<Double>) -> Int {
         let result = to.lowerBound + (to.upperBound - to.lowerBound) * (value - from.lowerBound) / (from.upperBound - from.lowerBound)
         return Int(result.rounded())
@@ -159,12 +152,32 @@ struct ShotConfigScreen: View {
             
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 25) {
-                    // Header
-                    VStack(spacing: 4) {
-                        Text("DRAGONBOT SYSTEM").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.dragonBotSecondary)
-                        Text("CONFIG TIRO #\(shotConfig.shotNumber)").font(.system(size: 28, weight: .black, design: .monospaced)).foregroundColor(.white)
+                    // Header con Botón de Ayuda Integrado
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("DRAGONBOT SYSTEM").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.dragonBotSecondary)
+                            Text("CONFIG TIRO #\(shotConfig.shotNumber)").font(.system(size: 24, weight: .black, design: .monospaced)).foregroundColor(.white)
+                        }
+                        .offset(x: glitchOffset)
+                        
+                        Spacer()
+                        
+                        // Botón de Ayuda Manual
+                        Button(action: { withAnimation(.spring()) { showInstructions = true } }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "questionmark.circle")
+                                Text("GUÍA").font(.system(size: 10, weight: .bold, design: .monospaced))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.dragonBotPrimary.opacity(0.1))
+                            .foregroundColor(.dragonBotPrimary)
+                            .cornerRadius(6)
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.dragonBotPrimary.opacity(0.4), lineWidth: 1))
+                        }
                     }
-                    .padding(.top).offset(x: glitchOffset)
+                    .padding(.horizontal)
+                    .padding(.top)
 
                     // Área de Cancha
                     VStack(spacing: 15) {
@@ -228,12 +241,77 @@ struct ShotConfigScreen: View {
                 }
             }
 
+            // POPUPS
             if showAbortConfirmation {
                 abortPopup
             }
+            
+            if showInstructions {
+                instructionsPopup
+            }
         }
-        .onAppear { withAnimation(.easeInOut(duration: 1.0).repeatForever()) { pulseAnim = 1.3 } }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.0).repeatForever()) { pulseAnim = 1.3 }
+        }
         .navigationBarHidden(true)
+    }
+
+    // MARK: - Popup de Instrucciones Manual
+    
+    private var instructionsPopup: some View {
+        ZStack {
+            Color.black.opacity(0.85).ignoresSafeArea()
+                .onTapGesture { withAnimation { showInstructions = false } }
+            
+            VStack(spacing: 24) {
+                // Header del Popup
+                VStack(spacing: 8) {
+                    Image(systemName: "hand.tap.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(.dragonBotPrimary)
+                    Text("INSTRUCCIONES DE USO")
+                        .font(.system(size: 18, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+                
+                // Contenido
+                VStack(alignment: .leading, spacing: 18) {
+                    instructionItem(icon: "1.circle.fill", title: "PUNTO DE IMPACTO", desc: "Selecciona en la cuadrícula de la cancha el área donde deseas que caiga la pelota.")
+                    
+                    instructionItem(icon: "2.circle.fill", title: "AJUSTES DE POTENCIA", desc: "Usa los sliders para definir la velocidad de salida y el intervalo entre disparos.")
+                    
+                    instructionItem(icon: "3.circle.fill", title: "MICRO-CALIBRACIÓN", desc: "Los controles de 'CARRO' permiten ajustar la dirección exacta (X, Y y Giro) para este tiro específico.")
+                }
+                .padding(.vertical, 10)
+                
+                Button(action: { withAnimation { showInstructions = false } }) {
+                    Text("CERRAR GUÍA")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.dragonBotPrimary)
+                        .foregroundColor(.black)
+                        .cornerRadius(10)
+                }
+            }
+            .padding(30)
+            .background(Color.dragonBotBackground)
+            .cornerRadius(20)
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.dragonBotPrimary.opacity(0.3), lineWidth: 1))
+            .frame(maxWidth: 340)
+        }
+    }
+
+    private func instructionItem(icon: String, title: String, desc: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.dragonBotPrimary)
+                .font(.system(size: 20))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.white)
+                Text(desc).font(.system(size: 11)).foregroundColor(.white.opacity(0.6)).lineLimit(3)
+            }
+        }
     }
 
     private var abortPopup: some View {
@@ -260,7 +338,7 @@ struct ShotConfigScreen: View {
     }
 }
 
-// MARK: - Componentes Visuales
+// MARK: - Subcomponentes Visuales
 
 struct ModernSlider: View {
     let label: String; @Binding var value: Double; let range: ClosedRange<Double>; let icon: String; var onChange: () -> Void

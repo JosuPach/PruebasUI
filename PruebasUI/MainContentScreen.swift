@@ -8,14 +8,12 @@ struct GridPatternView: View {
     
     var body: some View {
         Canvas { context, size in
-            // Líneas horizontales
             for y in stride(from: 0, to: size.height, by: spacing) {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: size.width, y: y))
                 context.stroke(path, with: .color(color.opacity(0.15)), lineWidth: 0.5)
             }
-            // Líneas verticales
             for x in stride(from: 0, to: size.width, by: spacing) {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
@@ -26,7 +24,7 @@ struct GridPatternView: View {
     }
 }
 
-// MARK: - GLASSY CONTAINER ACTUALIZADO (CON RED)
+// MARK: - GLASSY CONTAINER
 struct GlassyContainer<Content: View>: View {
     let color: Color
     let content: Content
@@ -38,116 +36,61 @@ struct GlassyContainer<Content: View>: View {
     
     var body: some View {
         ZStack {
-            // Fondo oscuro base
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.black.opacity(0.6))
-            
-            // LA RED: Patrón ilustrativo de fondo
             GridPatternView(color: color, spacing: 12)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // Brillo degradado sutil
             RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [color.opacity(0.1), .clear],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            
-            // Borde Neón
+                .fill(LinearGradient(colors: [color.opacity(0.1), .clear], startPoint: .topLeading, endPoint: .bottomTrailing))
             RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    LinearGradient(
-                        colors: [color.opacity(0.6), color.opacity(0.1), color.opacity(0.4)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
-            
+                .stroke(LinearGradient(colors: [color.opacity(0.6), color.opacity(0.1), color.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5)
             content
         }
     }
 }
 
-// MARK: - BOTÓN DE NAVEGACIÓN REESTILIZADO
+// MARK: - BOTONES DE NAVEGACIÓN Y CONFIG
 struct NavButtonContent: View {
     let label: String
     let icon: String
     let color: Color
-    
     var body: some View {
         GlassyContainer(color: color) {
             HStack(spacing: 15) {
-                // Contenedor del icono con aura
                 ZStack {
-                    Circle()
-                        .fill(color.opacity(0.15))
-                        .frame(width: 45, height: 45)
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(color)
-                        .shadow(color: color, radius: 5)
+                    Circle().fill(color.opacity(0.15)).frame(width: 45, height: 45)
+                    Image(systemName: icon).font(.system(size: 20, weight: .bold)).foregroundColor(color).shadow(color: color, radius: 5)
                 }
                 .padding(.leading, 15)
-                
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(label)
-                        .font(.system(size: 14, weight: .black, design: .monospaced))
-                        .foregroundColor(.white)
-                    Text("EXECUTE_SEQUENCE")
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundColor(color.opacity(0.6))
+                    Text(label).font(.system(size: 14, weight: .black, design: .monospaced)).foregroundColor(.white)
+                    Text("INICIAR SECUENCIA").font(.system(size: 8, design: .monospaced)).foregroundColor(color.opacity(0.6))
                 }
-                
                 Spacer()
-                
-                Image(systemName: "chevron.right.square.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(color.opacity(0.5))
-                    .padding(.trailing, 15)
+                Image(systemName: "chevron.right.square.fill").font(.system(size: 18)).foregroundColor(color.opacity(0.5)).padding(.trailing, 15)
             }
             .padding(.vertical, 16)
         }
     }
 }
 
-// MARK: - BOTÓN DE CONFIGURACIÓN (CUADRADO) REESTILIZADO
 struct ConfigButton: View {
     let label: String
     let icon: String
     let color: Color
     let action: () -> Void
-    
     var body: some View {
         Button(action: action) {
             GlassyContainer(color: color) {
                 VStack(spacing: 12) {
-                    // Indicador de "esquina activa" tipo HUD
                     HStack {
-                        Rectangle()
-                            .fill(color)
-                            .frame(width: 10, height: 2)
+                        Rectangle().fill(color).frame(width: 10, height: 2)
                         Spacer()
-                        Text("v1.0")
-                            .font(.system(size: 6, design: .monospaced))
-                            .foregroundColor(color.opacity(0.5))
+                        Text("v1.0").font(.system(size: 6, design: .monospaced)).foregroundColor(color.opacity(0.5))
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 8)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 28))
-                        .foregroundColor(color)
-                        .shadow(color: color, radius: 8)
-                    
-                    Text(label)
-                        .font(.system(size: 11, weight: .black, design: .monospaced))
-                        .foregroundColor(.white)
-                        .tracking(1)
-                    
+                    .padding(.horizontal, 8).padding(.top, 8)
+                    Image(systemName: icon).font(.system(size: 28)).foregroundColor(color).shadow(color: color, radius: 8)
+                    Text(label).font(.system(size: 11, weight: .black, design: .monospaced)).foregroundColor(.white).tracking(1)
                     Spacer(minLength: 8)
                 }
                 .frame(maxWidth: .infinity, minHeight: 110)
@@ -156,14 +99,12 @@ struct ConfigButton: View {
     }
 }
 
-// Nota: El resto de tu MainContentScreen permanece igual,
-// ya que estas modificaciones sobreescriben la apariencia de los componentes que ya usas.
 // MARK: - MAIN CONTENT SCREEN
 struct MainContentScreen: View {
     @ObservedObject var communicator: BLECommunicator
     @Binding var shotsMap: [Int : ShotConfig]
     
-    // Callbacks de navegación
+    // Callbacks
     var onBackClick: () -> Void
     var onDrillsClick: () -> Void
     var onSwapClick: () -> Void
@@ -171,22 +112,39 @@ struct MainContentScreen: View {
     var onAddShot: () -> Void
     var onDeleteShot: (Int) -> Void
     
+    // --- PERSISTENCIA DE AYUDA ---
+    @AppStorage("hasSeenManual") private var hasSeenManual = false
+    @AppStorage("hasSeenIA") private var hasSeenIA = false
+    @AppStorage("hasSeenSliders") private var hasSeenSliders = false
+    @AppStorage("hasSeenJoystick") private var hasSeenJoystick = false
+    @AppStorage("hasSeenDrills") private var hasSeenDrills = false
+    @AppStorage("hasSeenSwap") private var hasSeenSwap = false
+    
     // Estados de UI
     @State private var showDeviceSelectionDialog: Bool = false
     @State private var showConfigDialog: Bool = false
-    @State private var showJoystickDialog: Bool = false // NUEVO ESTADO
+    @State private var showJoystickDialog: Bool = false
     @State private var currentConfigMode: DragonBotMode = .NONE
     @State private var gridPhase: CGFloat = 0
     
-    init(communicator: BLECommunicator,
-         shotsMap: Binding<[Int : ShotConfig]>,
-         onBackClick: @escaping () -> Void,
-         onDrillsClick: @escaping () -> Void,
-         onSwapClick: @escaping () -> Void,
-         onConfigShot: @escaping (Int) -> Void,
-         onAddShot: @escaping () -> Void,
-         onDeleteShot: @escaping (Int) -> Void) {
-        
+    // Navegación Manual (para disparar ayuda antes de navegar)
+    @State private var navigateToDrills = false
+    @State private var navigateToSwap = false
+    
+    // Estado para el Popup de Ayuda
+    @State private var activeHelp: HelpContent? = nil
+    @State private var pendingAction: (() -> Void)? = nil
+
+    let helpData: [String: HelpContent] = [
+        "MANUAL": HelpContent(title: "MODO MANUAL", description: "CONTROLE SU DRAGONBOT AJUSTANDOLO MANUALMENTE CON LAS PERILLAS DE VELOCIDAD EN LA PARTE TRASERA, ESTE BOTÓN ACTIVARÁ DICHA FUNCIÓN.", icon: "hand.tap.fill", color: .dragonBotPrimary),
+        "IA": HelpContent(title: "MODO IA", description: "CONTROL POR VISIÓN ARTIFICIAL, LA DRAGONBOT DETECTA AL JUGADOR AUTOMATICAMENTE Y LANZA POR SI SOLA A SU POSICIÓN ACTUAL", icon: "bolt.shield.fill", color: .dragonBotSecondary),
+        "SLIDERS": HelpContent(title: "SLIDERS", description: "AJUSTE LA VELOCIDAD DESDE SU TELÉFONO Y REMOTAMENTE, PRESIONANDO EL BOTÓN DE REMOTO, DESPÚES USTED PODRA MOVER TODOS LOS EJES A SU ANTOJO.", icon: "slider.horizontal.3", color: .dragonBotPrimary),
+        "JOYSTICK": HelpContent(title: "CONTROL CARTRACK", description: "CONTROL MANUAL DEL MOVIMIENTO DEL CARRITO. UTILICE EL JOYSTICK IZQUIERDO PARA MOVERSE POR LA PISTA Y EL DERECHO PARA LA ORIENTACIÓN.", icon: "gamecontroller.fill", color: .dragonBotSecondary),
+        "DRILLS": HelpContent(title: "SECUENCIAS DE TIRO", description: "EDITE Y PROGRAME UNA SERIE DE TIROS CONSECUTIVOS CON DIFERENTES CONFIGURACIONES DE VELOCIDAD Y POSICIÓN.", icon: "scope", color: .dragonBotPrimary),
+        "SWAP": HelpContent(title: "SECUENCIA ÚNICA", description: "CONFIGURACIÓN DE TIRO RÁPIDO CON INTERCAMBIO DE PARÁMETROS DINÁMICOS PARA ENTRENAMIENTO ESPECÍFICO.", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
+    ]
+
+    init(communicator: BLECommunicator, shotsMap: Binding<[Int : ShotConfig]>, onBackClick: @escaping () -> Void, onDrillsClick: @escaping () -> Void, onSwapClick: @escaping () -> Void, onConfigShot: @escaping (Int) -> Void, onAddShot: @escaping () -> Void, onDeleteShot: @escaping (Int) -> Void) {
         self.communicator = communicator
         self._shotsMap = shotsMap
         self.onBackClick = onBackClick
@@ -196,7 +154,6 @@ struct MainContentScreen: View {
         self.onAddShot = onAddShot
         self.onDeleteShot = onDeleteShot
         
-        // --- CORRECCIÓN DE FONDO BLANCO ---
         UITableView.appearance().backgroundColor = .clear
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
@@ -206,143 +163,174 @@ struct MainContentScreen: View {
     
     var body: some View {
         ZStack {
-            // Capa 1: Fondo Tron
             Color.dragonBotBackground.ignoresSafeArea()
             StarFieldView()
             InfinitePerspectiveGrid(phase: gridPhase)
                 .stroke(LinearGradient(colors: [Color.dragonBotSecondary.opacity(0.3), .clear], startPoint: .bottom, endPoint: .top), lineWidth: 1.0)
                 .onAppear {
-                    withAnimation(Animation.linear(duration: 5.0).repeatForever(autoreverses: false)) {
-                        gridPhase = 1.0
-                    }
+                    withAnimation(Animation.linear(duration: 5.0).repeatForever(autoreverses: false)) { gridPhase = 1.0 }
                 }
             
-            // Capa 2: Contenido
             NavigationView {
-                ZStack {
-                    Color.clear.ignoresSafeArea()
-                    
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 35) {
-                            // Cabecera HUD
-                            VStack(spacing: 8) {
-                                Text("// SYSTEM_CORE_READY")
-                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    .foregroundColor(Color.dragonBotSecondary)
-                                
-                                Text("DRAGONBOT")
-                                    .font(.system(size: 36, weight: .black, design: .monospaced))
-                                    .foregroundColor(.white)
-                                    .tracking(8)
-                                    .shadow(color: Color.dragonBotPrimary.opacity(0.4), radius: 10)
-                            }
-                            .padding(.top, 40)
-                            
-                            ConnectionWarningView(communicator: communicator, onConnectClick: { showDeviceSelectionDialog = true })
-                            
-                            // SECCIÓN: MODOS RÁPIDOS
-                            ControlSection(title: "QUICK_OPERATIONS") {
-                                HStack(spacing: 15) {
-                                    ConfigButton(label: "MANUAL", icon: "hand.tap.fill", color: .dragonBotPrimary) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 35) {
+                        Text("DRAGONBOT")
+                            .font(.system(size: 36, weight: .black, design: .monospaced))
+                            .foregroundColor(.white).tracking(8).padding(.top, 40)
+                        
+                        ConnectionWarningView(communicator: communicator, onConnectClick: { showDeviceSelectionDialog = true })
+                        
+                        ControlSection(title: "MODOS RÁPIDOS") {
+                            HStack(spacing: 15) {
+                                ConfigButton(label: "MANUAL", icon: "hand.tap.fill", color: .dragonBotPrimary) {
+                                    checkHelp(key: "MANUAL", wasSeen: hasSeenManual) {
+                                        hasSeenManual = true
                                         communicator.sendCommand("[L000]")
                                     }
-                                    ConfigButton(label: "I.A. MODE", icon: "bolt.shield.fill", color: .dragonBotSecondary) {
+                                }
+                                ConfigButton(label: "MODO IA", icon: "bolt.shield.fill", color: .dragonBotSecondary) {
+                                    checkHelp(key: "IA", wasSeen: hasSeenIA) {
+                                        hasSeenIA = true
                                         communicator.sendCommand("[F000]")
                                     }
                                 }
                             }
+                        }
 
-                            // --- NUEVA SECCIÓN: JOYSTICK REMOTE ---
-                            ControlSection(title: "REMOTE_PILOT_INTERFACE") {
-                                Button(action: { showJoystickDialog = true }) {
-                                    NavButtonContent(label: "REAL_TIME_CONTROL", icon: "gamecontroller.fill", color: .dragonBotSecondary)
+                        ControlSection(title: "CONTROL REMOTO DE CARTRACK") {
+                            Button(action: {
+                                checkHelp(key: "JOYSTICK", wasSeen: hasSeenJoystick) {
+                                    hasSeenJoystick = true
+                                    showJoystickDialog = true
                                 }
+                            }) {
+                                NavButtonContent(label: "CONTROL REMOTO EN TIEMPO REAL", icon: "gamecontroller.fill", color: .dragonBotSecondary)
                             }
-                            
-                            // SECCIÓN: PROGRAMAS TÁCTICOS
-                            ControlSection(title: "TACTICAL_PROGRAMS") {
-                                VStack(spacing: 15) {
-                                    NavigationLink(destination: DrillScreen(communicator: communicator, shots: $shotsMap, onBackClick: onBackClick, onConfigShot: onConfigShot, onAddShot: onAddShot, onDeleteShot: onDeleteShot)) {
-                                        NavButtonContent(label: "DRILL_EDITOR", icon: "scope", color: .dragonBotPrimary)
+                        }
+                        
+                        ControlSection(title: "PROGRAMAS TÁCTICOS") {
+                            VStack(spacing: 15) {
+                                // Navegación Manual para Drills
+                                Button(action: {
+                                    checkHelp(key: "DRILLS", wasSeen: hasSeenDrills) {
+                                        hasSeenDrills = true
+                                        navigateToDrills = true
                                     }
-                                    NavigationLink(destination: SwapConfigScreen(communicator: communicator, onClose: onBackClick)) {
-                                        NavButtonContent(label: "SWAP_PROTOCOL", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
-                                    }
+                                }) {
+                                    NavButtonContent(label: "EDITOR DE SECUENCIAS DE TIRO", icon: "scope", color: .dragonBotPrimary)
                                 }
+                                .background(
+                                    NavigationLink(destination: DrillScreen(communicator: communicator, shots: $shotsMap, onBackClick: onBackClick, onConfigShot: onConfigShot, onAddShot: onAddShot, onDeleteShot: onDeleteShot), isActive: $navigateToDrills) { EmptyView() }
+                                )
+
+                                // Navegación Manual para Swap
+                                Button(action: {
+                                    checkHelp(key: "SWAP", wasSeen: hasSeenSwap) {
+                                        hasSeenSwap = true
+                                        navigateToSwap = true
+                                    }
+                                }) {
+                                    NavButtonContent(label: "EDITOR DE SECUENCIAS ÚNICAS", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
+                                }
+                                .background(
+                                    NavigationLink(destination: SwapConfigScreen(communicator: communicator, onClose: onBackClick), isActive: $navigateToSwap) { EmptyView() }
+                                )
                             }
-                            
-                            // SECCIÓN: AJUSTES MANUALES
-                            ControlSection(title: "CRITICAL_OVERRIDE") {
-                                HStack(spacing: 15) {
-                                    ConfigButton(label: "SLIDERS", icon: "slider.horizontal.3", color: .dragonBotPrimary) {
+                        }
+                        
+                        ControlSection(title: "CRITICAL_OVERRIDE") {
+                            HStack(spacing: 15) {
+                                ConfigButton(label: "SLIDERS", icon: "slider.horizontal.3", color: .dragonBotPrimary) {
+                                    checkHelp(key: "SLIDERS", wasSeen: hasSeenSliders) {
+                                        hasSeenSliders = true
                                         currentConfigMode = .MANUAL
                                         showConfigDialog = true
                                     }
-                                    ConfigButton(label: "AUTO SHOT", icon: "target", color: .white) {
-                                        currentConfigMode = .AUTO
-                                        showConfigDialog = true
-                                    }
+                                }
+                                ConfigButton(label: "TIRO AUTOMÁTICO", icon: "target", color: .white) {
+                                    currentConfigMode = .AUTO
+                                    showConfigDialog = true
                                 }
                             }
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 60)
                     }
-                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 24).padding(.bottom, 60)
                 }
                 .navigationBarHidden(true)
             }
             .navigationViewStyle(StackNavigationViewStyle())
+
+            // CAPA DEL POPUP
+            if let help = activeHelp {
+                HelpPopupView(content: help) {
+                    activeHelp = nil
+                    pendingAction?()
+                    pendingAction = nil
+                }
+            }
         }
-        // DIÁLOGOS (SHEETS)
         .sheet(isPresented: $showDeviceSelectionDialog) {
-            DeviceSelectionDialog(
-                communicator: communicator,
-                onDeviceSelected: { device in
-                    communicator.connect(device: device)
-                    showDeviceSelectionDialog = false
-                },
-                onDismiss: { showDeviceSelectionDialog = false }
-            )
+            DeviceSelectionDialog(communicator: communicator, onDeviceSelected: { device in
+                communicator.connect(device: device)
+                showDeviceSelectionDialog = false
+            }, onDismiss: { showDeviceSelectionDialog = false })
         }
         .sheet(isPresented: $showConfigDialog) {
-            ModeConfigurationDialog(
-                mode: currentConfigMode,
-                onDismiss: {
-                    showConfigDialog = false
-                    currentConfigMode = .NONE
-                },
-                onSave: { command in
-                    communicator.sendCommand(command)
-                }
-            )
+            ModeConfigurationDialog(mode: currentConfigMode, onDismiss: {
+                showConfigDialog = false
+                currentConfigMode = .NONE
+            }, onSave: { command in communicator.sendCommand(command) })
         }
-        // --- POPUP DE JOYSTICKS ---
         .fullScreenCover(isPresented: $showJoystickDialog) {
-            JoystickRemoteDialog(communicator: communicator) {
-                showJoystickDialog = false
-            }
+            JoystickRemoteDialog(communicator: communicator) { showJoystickDialog = false }
+        }
+    }
+
+    private func checkHelp(key: String, wasSeen: Bool, action: @escaping () -> Void) {
+        if !wasSeen {
+            activeHelp = helpData[key]
+            pendingAction = action
+        } else {
+            action()
         }
     }
 }
 
+// Nota: El resto de componentes (JoystickRemoteDialog, HelpPopupView, etc.) se mantienen igual debajo de este bloque.
 // MARK: - COMPONENTE DE JOYSTICKS REMOTOS
 struct JoystickRemoteDialog: View {
     @ObservedObject var communicator: BLECommunicator
     let onDismiss: () -> Void
     
+    // Estado para la animación de la rejilla
+    @State private var gridOffset: CGSize = .zero
+    @State private var timer = Timer.publish(every: 0.02, on: .main, in: .common).autoconnect()
+    
+    // Velocidad actual derivada de los joysticks
+    @State private var currentVelocity: CGSize = .zero
+    
     var body: some View {
         ZStack {
             Color.dragonBotBackground.ignoresSafeArea()
+            
+            // FONDO DINÁMICO: Reacciona a currentVelocity
+            ReactiveGridView(color: .dragonBotSecondary, motionOffset: gridOffset)
+                .ignoresSafeArea()
+                .onReceive(timer) { _ in
+                    // Actualizamos la posición de la rejilla basándonos en la velocidad del joystick
+                    // La velocidad se multiplica por un factor de escala para el efecto visual
+                    gridOffset.width += currentVelocity.width * 10
+                    gridOffset.height += currentVelocity.height * 10
+                }
             
             VStack(spacing: 0) {
                 // Header
                 HStack {
                     VStack(alignment: .leading) {
-                        Text("REMOTE_PILOT_LINK")
+                        Text("CONTROL REMOTO DE CARTRACK")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(.dragonBotSecondary)
-                        Text("REAL_TIME_DATA_STREAM")
+                        Text("SISTEMA DE NAVEGACIÓN ACTIVO")
                             .font(.system(size: 8, design: .monospaced))
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -360,20 +348,27 @@ struct JoystickRemoteDialog: View {
                 
                 // Área de Joysticks
                 HStack {
-                    // Joystick Izquierdo (Movimiento/Orientación)
+                    // Joystick Izquierdo (Movimiento + Reacción de Rejilla)
                     VStack {
-                        Text("OSC_PRIMARY").font(.system(size: 10, design: .monospaced)).foregroundColor(.dragonBotPrimary)
+                        Text("MOVIMIENTO").font(.system(size: 10, design: .monospaced)).foregroundColor(.dragonBotPrimary)
                         JoystickView(label: "L") { x, y in
+                            // Enviamos comando BLE
                             let cmd = "[LX\(Int(x * 127 + 127))Y\(Int(y * 127 + 127))]"
                             communicator.sendCommand(cmd)
+                            
+                            // ACTUALIZAMOS LA VELOCIDAD DE LA REJILLA VISUAL
+                            // x e y vienen de -1.0 a 1.0
+                            withAnimation(.linear(duration: 0.1)) {
+                                currentVelocity = CGSize(width: x, height: -y)
+                            }
                         }
                     }
                     
                     Spacer()
                     
-                    // Joystick Derecho (Cámara/Puntería)
+                    // Joystick Derecho (Orientación)
                     VStack {
-                        Text("OSC_SECONDARY").font(.system(size: 10, design: .monospaced)).foregroundColor(.dragonBotSecondary)
+                        Text("CÁMARA").font(.system(size: 10, design: .monospaced)).foregroundColor(.dragonBotSecondary)
                         JoystickView(label: "R") { x, y in
                             let cmd = "[RX\(Int(x * 127 + 127))Y\(Int(y * 127 + 127))]"
                             communicator.sendCommand(cmd)
@@ -384,12 +379,17 @@ struct JoystickRemoteDialog: View {
                 
                 // Botones Rápidos HUD
                 HStack(spacing: 20) {
-                    Button("STOP") { communicator.sendCommand("[O000]") }
-                        .buttonStyle(TerminalButtonStyle(color: .dragonBotError))
-                    Button("CENTER") { communicator.sendCommand("[C127]") }
-                        .buttonStyle(TerminalButtonStyle(color: .white))
-                    Button("FIRE") { communicator.sendCommand("[E255]") }
-                        .buttonStyle(TerminalButtonStyle(color: .dragonBotPrimary))
+                    Button("DETENER") {
+                        communicator.sendCommand("[O000]")
+                        currentVelocity = .zero
+                    }
+                    .buttonStyle(TerminalButtonStyle(color: .dragonBotError))
+                    
+                    Button("CENTRO") { communicator.sendCommand("[C127]") }
+                    .buttonStyle(TerminalButtonStyle(color: .white))
+                    
+                    Button("MAX POTENCIA") { communicator.sendCommand("[E255]") }
+                    .buttonStyle(TerminalButtonStyle(color: .dragonBotPrimary))
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 50)
@@ -464,7 +464,7 @@ struct ModeConfigurationDialog: View {
             VStack(spacing: 0) {
                 // Header del Dialog
                 HStack {
-                    Text("SYSTEM_CONFIG // \(String(describing: mode))")
+                    Text("SISTEMA DE CONFIGURACIÓN \(String(describing: mode))")
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                         .foregroundColor(.dragonBotPrimary)
                     Spacer()
@@ -482,10 +482,10 @@ struct ModeConfigurationDialog: View {
                 } else {
                     VStack {
                         Spacer()
-                        Text("AUTO_MODE_READY")
+                        Text("MODO AUTOMÁTICO LISTO")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
-                        Text("SYSTEM_WAITING_FOR_TRIGGER")
+                        Text("SISTEMA EN ESPERA...")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.white.opacity(0.5))
                         Spacer()
@@ -514,18 +514,18 @@ struct ManualSlidersList: View {
             VStack(spacing: 25) {
                 // Botones de Comando Directo
                 HStack(spacing: 15) {
-                    Button("SHUTDOWN") { onSave("[O000]") }.buttonStyle(TerminalButtonStyle(color: .dragonBotError))
-                    Button("REMOTE") { onSave("[R000]") }.buttonStyle(TerminalButtonStyle(color: .dragonBotSecondary))
+                    Button("APAGAR") { onSave("[O000]") }.buttonStyle(TerminalButtonStyle(color: .dragonBotError))
+                    Button("REMOTO") { onSave("[R000]") }.buttonStyle(TerminalButtonStyle(color: .dragonBotSecondary))
                 }
                 .padding(.top)
                 
                 // Lista de Sliders
                 VStack(spacing: 30) {
-                    SliderItem(label: "SERVO_UP (A)", value: $vA) { send(prefix: "A", val: vA) }
-                    SliderItem(label: "SERVO_DOWN (B)", value: $vB) { send(prefix: "B", val: vB) }
-                    SliderItem(label: "ELEVACIÓN (C)", value: $vC) { send(prefix: "C", val: vC) }
-                    SliderItem(label: "ROTACIÓN (D)", value: $vD) { send(prefix: "D", val: vD) }
-                    SliderItem(label: "FEEDER (E)", value: $vE) { send(prefix: "E", val: vE) }
+                    SliderItem(label: "ARRIBA (A)", value: $vA) { send(prefix: "A", val: vA) }
+                    SliderItem(label: "ABAJO (B)", value: $vB) { send(prefix: "B", val: vB) }
+                    SliderItem(label: "VELOCIDAD 1 (C)", value: $vC) { send(prefix: "C", val: vC) }
+                    SliderItem(label: "VELOCIDAD 2 (D)", value: $vD) { send(prefix: "D", val: vD) }
+                    SliderItem(label: "CADENCIA (E)", value: $vE) { send(prefix: "E", val: vE) }
                 }
                 .padding(.top, 10)
             }
@@ -590,10 +590,10 @@ struct ConnectionWarningView: View {
         let activeColor = isConnected ? Color.dragonBotPrimary : Color.dragonBotError
         HStack {
             Circle().fill(activeColor).frame(width: 8, height: 8).shadow(color: activeColor, radius: 4)
-            Text(isConnected ? "LINK_ESTABLISHED" : "LINK_OFFLINE").font(.system(size: 11, weight: .black, design: .monospaced)).foregroundColor(activeColor)
+            Text(isConnected ? "CONEXIÓN ESTABLECIDA" : "SIN CONEXIÓN").font(.system(size: 11, weight: .black, design: .monospaced)).foregroundColor(activeColor)
             Spacer()
             if !isConnected {
-                Button("INIT_SCAN", action: onConnectClick)
+                Button("ESCANEAR DISPOSITIVOS", action: onConnectClick)
                     .font(.system(size: 10, design: .monospaced))
                     .padding(8).background(activeColor.opacity(0.2)).foregroundColor(activeColor).cornerRadius(4)
             }
@@ -601,3 +601,88 @@ struct ConnectionWarningView: View {
     }
 }
 
+struct HelpContent {
+    let title: String
+    let description: String
+    let icon: String
+    let color: Color
+}
+
+struct HelpPopupView: View {
+    let content: HelpContent
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.8).ignoresSafeArea()
+                .onTapGesture { onDismiss() }
+            
+            GlassyContainer(color: content.color) {
+                VStack(spacing: 20) {
+                    Image(systemName: content.icon)
+                        .font(.system(size: 45))
+                        .foregroundColor(content.color)
+                        .shadow(color: content.color, radius: 10)
+                        .padding(.top)
+                    
+                    VStack(spacing: 10) {
+                        Text(content.title)
+                            .font(.system(size: 16, weight: .black, design: .monospaced))
+                            .foregroundColor(.white)
+                        
+                        Text(content.description)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                    
+                    Button(action: onDismiss) {
+                        Text("ENTENDIDO")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .padding(.horizontal, 30)
+                            .padding(.vertical, 10)
+                            .background(content.color.opacity(0.2))
+                            .foregroundColor(content.color)
+                            .cornerRadius(5)
+                            .overlay(RoundedRectangle(cornerRadius: 5).stroke(content.color, lineWidth: 1))
+                    }
+                    .padding(.bottom)
+                }
+                .padding()
+            }
+            .frame(width: 280)
+        }
+    }
+}
+
+struct ReactiveGridView: View {
+    var color: Color
+    var motionOffset: CGSize // El desplazamiento acumulado
+    var spacing: CGFloat = 40
+    
+    var body: some View {
+        Canvas { context, size in
+            // Calculamos el desplazamiento relativo para mantener la rejilla "infinita"
+            // Usamos modulo para que al llegar al límite del espaciado, reinicie suavemente
+            let offsetX = motionOffset.width.truncatingRemainder(dividingBy: spacing)
+            let offsetY = motionOffset.height.truncatingRemainder(dividingBy: spacing)
+            
+            // Líneas Verticales (Movimiento en X)
+            for x in stride(from: offsetX - spacing, through: size.width + spacing, by: spacing) {
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+                context.stroke(path, with: .color(color.opacity(0.15)), lineWidth: 0.5)
+            }
+            
+            // Líneas Horizontales (Movimiento en Y)
+            for y in stride(from: offsetY - spacing, through: size.height + spacing, by: spacing) {
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                context.stroke(path, with: .color(color.opacity(0.15)), lineWidth: 0.5)
+            }
+        }
+    }
+}
