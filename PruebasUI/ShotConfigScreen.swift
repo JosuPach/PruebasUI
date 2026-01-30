@@ -1,53 +1,36 @@
 import SwiftUI
 
-// MARK: - Vista Principal
+// MARK: - Vista Principal ShotConfig
 struct ShotConfigScreen: View {
     @Environment(\.dismiss) var dismiss
-    
     @ObservedObject var shotConfig: ShotConfig
     @ObservedObject var communicator: BLECommunicator
 
-    // Callbacks de flujo
     var onSaveConfig: (ShotConfig) -> Void
     var onCancel: () -> Void
 
-    // Valores permitidos para la rejilla (D=Y, C=X)
     let dValues: [Int] = [0, 127, 255]
     let cValues: [Int] = [0, 64, 127, 191, 255]
 
-    // ESTADOS TEMPORALES
-    @State private var speedBaseTemp: Double
-    @State private var spinBiasTemp: Double // Corregido: ahora persiste
+    @State private var powerTemp: Double
+    @State private var spinTemp: Double
     @State private var delayTemp: Double
     @State private var targetFTemp: Double
     @State private var targetGTemp: Double
     @State private var targetHTemp: Double
     @State private var selectedRow: Int
     @State private var selectedCol: Int
-    
-    // Estados visuales
     @State private var pulseAnim: CGFloat = 1.0
-    @State private var jitterX: CGFloat = 0
-    @State private var jitterY: CGFloat = 0
-    @State private var aiOpacity: Double = 1.0
-    @State private var confidence: Double = 0.98
-    
-    let timer = Timer.publish(every: 0.08, on: .main, in: .common).autoconnect()
 
-    init(
-        shotConfig: ShotConfig,
-        communicator: BLECommunicator,
-        onSaveConfig: @escaping (ShotConfig) -> Void,
-        onCancel: @escaping () -> Void
-    ) {
+    init(shotConfig: ShotConfig, communicator: BLECommunicator, onSaveConfig: @escaping (ShotConfig) -> Void, onCancel: @escaping ( ) -> Void) {
         self.shotConfig = shotConfig
         self.communicator = communicator
         self.onSaveConfig = onSaveConfig
         self.onCancel = onCancel
 
-        // Cargamos los valores actuales del objeto para que aparezcan en los sliders
-        _speedBaseTemp = State(initialValue: Double(shotConfig.speedAB))
-        _spinBiasTemp = State(initialValue: Double(shotConfig.spinBias)) // <-- CARGA VALOR GUARDADO
+        // Inicializamos con los valores actuales del objeto
+        _powerTemp = State(initialValue: Double(shotConfig.speedAB))
+        _spinTemp = State(initialValue: Double(shotConfig.spinBias))
         _delayTemp = State(initialValue: Double(shotConfig.delayE))
         _targetFTemp = State(initialValue: shotConfig.targetF)
         _targetGTemp = State(initialValue: shotConfig.targetG)
@@ -59,36 +42,53 @@ struct ShotConfigScreen: View {
         _selectedCol = State(initialValue: col)
     }
 
+    // --- LÓGICA DE ESCALADO UNIFICADA ---
+    private func scaleTo99(_ value: Double) -> Int {
+        let clamped = max(0, min(255, value))
+        return Int(((clamped * 99.0) / 255.0).rounded())
+    }
+    
+    private func scaleTo20(_ value: Double) -> Int { Int(((value * 20.0) / 255.0).rounded()) }
+    private func scaleToCT(_ value: Double) -> Int { Int(((value * 6000.0 / 255.0) - 3000.0).rounded()) }
+
+    private func generateSHCommand() -> String {
+        let ix = scaleTo99(Double(cValues[selectedCol]))
+        let iy = scaleTo99(Double(dValues[selectedRow]))
+        
+        // Mixer de motores: Importante usar el mismo escalado que en DrillScreen
+        let vA = scaleTo99(powerTemp + spinTemp)
+        let vB = scaleTo99(powerTemp - spinTemp)
+        
+        let ifeed = scaleTo99(delayTemp)
+        let icx = scaleTo20(targetFTemp)
+        let icy = scaleTo20(targetGTemp)
+        let ict = scaleToCT(targetHTemp)
+        
+        return "[SH\(ix),\(iy),\(vA),\(vB),\(ifeed),\(icx),\(icy),\(ict)]"
+    }
+
     private var isModified: Bool {
-        Int(speedBaseTemp.rounded()) != shotConfig.speedAB ||
-        Int(spinBiasTemp.rounded()) != shotConfig.spinBias || // <-- DETECTA CAMBIOS EN SPIN
-        Int(delayTemp.rounded()) != shotConfig.delayE ||
-        targetFTemp.rounded() != shotConfig.targetF ||
-        targetGTemp.rounded() != shotConfig.targetG ||
-        targetHTemp.rounded() != shotConfig.targetH ||
+        Int(powerTemp.rounded()) != shotConfig.speedAB ||
+        Int(spinTemp.rounded()) != shotConfig.spinBias ||
+        Int(delayTemp.rounded()) != shotConfig.delayE || // Añadido para detectar cambios en delay
         selectedRow != (dValues.firstIndex(of: shotConfig.targetD) ?? 1) ||
         selectedCol != (cValues.firstIndex(of: shotConfig.targetC) ?? 2)
     }
 
-    private func saveConfigAndReturn() {
-        // Cálculo con balance de spin aplicado a los motores
-        let calculatedMotorA = speedBaseTemp + spinBiasTemp
-        let calculatedMotorB = speedBaseTemp - spinBiasTemp
+    private func saveAndSend() {
+        let command = generateSHCommand()
+        print("""
+        ---------------------------------
+        💾 GUARDANDO CONFIGURACIÓN:
+        Valores Brutos -> P:\(powerTemp), S:\(spinTemp), D:\(delayTemp)
+        Comando Final  -> \(command)
+        ---------------------------------
+        """)
         
-        let vA = mapValue(calculatedMotorA, from: 0...255, to: 0...99)
-        let vB = mapValue(calculatedMotorB, from: 0...255, to: 0...99)
-        let xS = mapValue(Double(dValues[selectedRow]), from: 0...255, to: 0...99)
-        let yS = mapValue(Double(cValues[selectedCol]), from: 0...255, to: 0...99)
-        let fS = mapValue(delayTemp, from: 200...2000, to: 0...99)
-        let cxS = mapValue(targetFTemp, from: 0...255, to: 0...20)
-        let cyS = mapValue(targetGTemp, from: 0...255, to: 0...20)
-        let ctS = mapValue(targetHTemp, from: 0...255, to: -3000...3000)
-        
-        let shString = "[SH\(xS),\(yS),\(vA),\(vB),\(fS),\(cxS),\(cyS),\(ctS)]"
-        
-        // ACTUALIZACIÓN DEL MODELO (PERSISTENCIA)
-        shotConfig.speedAB = Int(speedBaseTemp.rounded())
-        shotConfig.spinBias = Int(spinBiasTemp.rounded()) // <-- GUARDA EL VALOR DEL SLIDER
+        // PERSISTENCIA: Guardamos los valores en base 0-255
+        // para que getSHString en DrillScreen haga el mapeo final correctamente.
+        shotConfig.speedAB = Int(powerTemp.rounded())
+        shotConfig.spinBias = Int(spinTemp.rounded())
         shotConfig.delayE = Int(delayTemp.rounded())
         shotConfig.targetF = targetFTemp.rounded()
         shotConfig.targetG = targetGTemp.rounded()
@@ -96,243 +96,205 @@ struct ShotConfigScreen: View {
         shotConfig.targetD = dValues[selectedRow]
         shotConfig.targetC = cValues[selectedCol]
 
-        //communicator.sendCommand(shString)
         onSaveConfig(shotConfig)
         dismiss()
-    }
-
-    private func mapValue(_ value: Double, from: ClosedRange<Double>, to: ClosedRange<Double>) -> Int {
-        let clampedValue = max(from.lowerBound, min(from.upperBound, value))
-        let result = to.lowerBound + (to.upperBound - to.lowerBound) * (clampedValue - from.lowerBound) / (from.upperBound - from.lowerBound)
-        return Int(result.rounded())
     }
 
     var body: some View {
         ZStack {
             Color(red: 0.05, green: 0.05, blue: 0.07).ignoresSafeArea()
             
-            VStack(spacing: 0) {
+            VStack(spacing: 15) {
                 headerView
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 25) {
-                        courtVisualization
-                        helpBanner
-
-                        VStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("CONFIGURACIÓN DE RUEDAS")
-                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.cyan).opacity(0.8)
-                                
-                                ParameterSlider(label: "VELOCIDAD DE DISPARO", value: $speedBaseTemp, range: 0...255, icon: "bolt.fill")
-                                
-                                ParameterSlider(label: "SPIN (OFFSET)", value: $spinBiasTemp, range: -127...127, icon: "arrow.up.and.down.righttriangle.up.righttriangle.down.fill")
-                                    .overlay(
-                                        Text(spinBiasTemp > 0 ? "TOP" : (spinBiasTemp < 0 ? "BACK" : "NEUTRO"))
-                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                            .foregroundColor(.cyan)
-                                            .offset(y: -18),
-                                        alignment: .topTrailing
-                                    )
-                            }
-                            .padding(12).background(Color.white.opacity(0.03)).cornerRadius(15)
-
-                            ParameterSlider(label: "INTERVALO DISPARO (ms)", value: $delayTemp, range: 200...2000, icon: "clock")
-                            
-                            HStack(spacing: 10) {
-                                ParameterMiniSlider(label: "CARTRACK X", value: $targetFTemp, range: 0...255)
-                                ParameterMiniSlider(label: "CARTRACK Y", value: $targetGTemp, range: 0...255)
-                            }
-                            
-                            ParameterSlider(label: "RETARDO ENTRE DISPARO", value: $targetHTemp, range: 0...255, icon: "rotate.right.fill")
-                        }
-                        .padding(.horizontal)
-
-                        actionButtons
+                
+                courtVisualization
+                    .frame(height: 220)
+                
+                VStack(spacing: 10) {
+                    HStack(spacing: 10) {
+                        ModernParameterSlider(label: "POTENCIA", value: $powerTemp, range: 0...255, icon: "bolt.fill", displayValue: "\(scaleTo99(powerTemp))")
+                        ModernParameterSlider(label: "SPIN BALL", value: $spinTemp, range: -127...127, icon: "rotate.3d", displayValue: spinTemp > 0 ? "TOP" : (spinTemp < 0 ? "BACK" : "0"))
+                    }
+                    
+                    HStack(spacing: 10) {
+                        // Cambiado displayValue para mostrar 0-99 y ser consistente
+                        ModernParameterSlider(label: "CADENCIA", value: $delayTemp, range: 0...255, icon: "speedometer", displayValue: "\(scaleTo99(delayTemp))")
+                        ModernParameterSlider(label: "GIRO CT", value: $targetHTemp, range: 0...255, icon: "move.3d", displayValue: "\(scaleToCT(targetHTemp))")
+                    }
+                    
+                    HStack(spacing: 10) {
+                        ModernMiniSlider(label: "CARTRACK X", value: $targetFTemp, range: 0...255, displayValue: "\(scaleTo20(targetFTemp))")
+                        ModernMiniSlider(label: "CARTRACK Y", value: $targetGTemp, range: 0...255, displayValue: "\(scaleTo20(targetGTemp))")
                     }
                 }
+                .padding(.horizontal)
+                
+                Spacer()
+                
+                // Texto de depuración en tiempo real
+                Text("PROTOTIPO: \(generateSHCommand())")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(.cyan.opacity(0.5))
+                
+                actionButtons
             }
-        }
-        .navigationBarHidden(true)
-        .onReceive(timer) { _ in
-            jitterX = CGFloat.random(in: -0.6...0.6)
-            jitterY = CGFloat.random(in: -0.6...0.6)
-            aiOpacity = Double.random(in: 0.9...1.0)
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) { pulseAnim = 3.5 }
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { pulseAnim = 1.3 }
         }
     }
-
     private var headerView: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("DRAGONBOT").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(Color.cyan)
-                Text("MIXER DE TIRO").font(.system(size: 22, weight: .black, design: .monospaced)).foregroundColor(.white)
+        HStack {
+            VStack(alignment: .leading) {
+                Text("DRAGONBOT OS").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.cyan)
+                Text("MIXER MANUAL").font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(.white)
             }
             Spacer()
-            Text("OS_V2").font(.system(size: 10, design: .monospaced)).foregroundColor(Color.cyan).padding(4).border(Color.cyan)
-        }.padding()
+            Image(systemName: "cpu").foregroundColor(.cyan)
+        }.padding([.horizontal, .top])
     }
 
     private var courtVisualization: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Circle().fill(Color.red).frame(width: 8, height: 8)
-                Text("PREDICCIÓN DE IMPACTO").font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.white)
-                Spacer()
-                Text("ZONA \(selectedRow),\(selectedCol)").font(.system(size: 10, design: .monospaced)).foregroundColor(Color.cyan)
-            }.padding(.horizontal)
+        ZStack {
+            RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(0.4))
+            
+            ZStack(alignment: .bottom) {
+                TennisCourtShape()
+                    .fill(LinearGradient(colors: [Color.cyan.opacity(0.2), Color.clear], startPoint: .bottom, endPoint: .top))
+                    .overlay(TennisCourtLines().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    .frame(width: 280, height: 160)
+                    .rotation3DEffect(.degrees(-20), axis: (x: 1, y: 0, z: 0))
 
-            ZStack {
-                ZStack(alignment: .bottom) {
-                    TennisCourtShape().fill(LinearGradient(colors: [Color.cyan.opacity(0.15), Color.clear], startPoint: .bottom, endPoint: .top))
-                        .overlay(TennisCourtLines().stroke(Color.white.opacity(0.2), lineWidth: 1.2))
-
-                    VStack(spacing: 12) {
-                        ForEach((0...2).reversed(), id: \.self) { row in
-                            HStack(spacing: 28) {
-                                ForEach(0..<cValues.count, id: \.self) { col in
-                                    let isSelected = selectedRow == row && selectedCol == col
-                                    let scaleFactor: CGFloat = 0.75 + (CGFloat(row) * 0.12)
-                                    
-                                    ZStack {
-                                        if isSelected {
-                                            DetectionBox(confidence: confidence)
-                                                .frame(width: 48, height: 48)
-                                                .offset(x: jitterX, y: jitterY)
-                                                .opacity(aiOpacity)
-                                            
-                                            Circle()
-                                                .stroke(Color.cyan, lineWidth: 1.5)
-                                                .frame(width: 12, height: 12)
-                                                .scaleEffect(pulseAnim)
-                                                .opacity(2.0 - pulseAnim)
-                                        }
-                                        TennisBallView(isSelected: isSelected).frame(width: 20, height: 20)
+                VStack(spacing: 18) {
+                    ForEach((0...2).reversed(), id: \.self) { row in
+                        HStack(spacing: 28) {
+                            ForEach(0..<cValues.count, id: \.self) { col in
+                                let isSelected = selectedRow == row && selectedCol == col
+                                
+                                ZStack {
+                                    if isSelected {
+                                        Circle()
+                                            .stroke(Color.cyan, lineWidth: 2)
+                                            .frame(width: 38, height: 38)
+                                            .scaleEffect(pulseAnim)
+                                            .opacity(1.3 - pulseAnim)
                                     }
-                                    .scaleEffect(scaleFactor)
-                                    .frame(width: 42, height: 42)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        UISelectionFeedbackGenerator().selectionChanged()
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            selectedRow = row; selectedCol = col
-                                        }
+                                    
+                                    // Esferas grandes
+                                    Circle()
+                                        .fill(isSelected ? Color(red: 0.82, green: 0.98, blue: 0.0) : Color.white.opacity(0.1))
+                                        .frame(width: 26, height: 26)
+                                        .overlay(
+                                            Image(systemName: "tennisball.fill")
+                                                .resizable().padding(5)
+                                                .foregroundColor(isSelected ? .black.opacity(0.6) : .clear)
+                                        )
+                                        .shadow(color: isSelected ? .cyan.opacity(0.4) : .clear, radius: 8)
+                                }
+                                .onTapGesture {
+                                    UISelectionFeedbackGenerator().selectionChanged()
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedRow = row; selectedCol = col
                                     }
                                 }
                             }
                         }
                     }
-                    .padding(.bottom, 25)
                 }
-                .frame(width: 380, height: 260)
-                .rotation3DEffect(.degrees(-35), axis: (x: 1, y: 0, z: 0))
-                .offset(y: -15)
-
-                TennisNetView()
-                    .frame(width: 340, height: 40)
-                    .offset(y: 108)
+                .rotation3DEffect(.degrees(-20), axis: (x: 1, y: 0, z: 0))
+                .offset(y: -20)
             }
-            .frame(height: 280).background(Color.black.opacity(0.3)).cornerRadius(20).clipped()
         }.padding(.horizontal)
     }
 
-    private var helpBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "info.circle.fill").foregroundColor(.cyan)
-            Text("Selecciona el punto de impacto para configurar la trayectoria.")
-                .font(.system(size: 9)).foregroundColor(.white.opacity(0.5))
-        }.padding(.horizontal).frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private var actionButtons: some View {
-        HStack(spacing: 15) {
-            Button(action: { onCancel(); dismiss() }) {
-                Text("CANCELAR").font(.system(size: 13, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(12)
+        HStack(spacing: 12) {
+            Button(action: { dismiss() }) {
+                Text("CANCELAR").font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .frame(maxWidth: .infinity).padding(.vertical, 15)
+                    .background(Color.white.opacity(0.05)).foregroundColor(.white).cornerRadius(10)
             }
-            Button(action: saveConfigAndReturn) {
-                Text("GUARDAR Y ENVIAR").font(.system(size: 13, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity).padding().background(isModified ? Color.cyan : Color.white.opacity(0.05)).foregroundColor(isModified ? .black : .white.opacity(0.3)).cornerRadius(12)
-            }
-            .disabled(!isModified)
-        }.padding(.horizontal).padding(.bottom, 40)
+            Button(action: saveAndSend) {
+                Text("GUARDAR Y ENVIAR").font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .frame(maxWidth: .infinity).padding(.vertical, 15)
+                    .background(isModified ? Color.cyan : Color.white.opacity(0.1))
+                    .foregroundColor(isModified ? .black : .white.opacity(0.2)).cornerRadius(10)
+            }.disabled(!isModified)
+        }.padding(.horizontal).padding(.bottom, 15)
     }
 }
 
-// MARK: - Sub-componentes Visuales
+// MARK: - Componentes de Sliders Modernos
+struct ModernParameterSlider: View {
+    let label: String; @Binding var value: Double; let range: ClosedRange<Double>; let icon: String; let displayValue: String
+    @State private var isDragging = false
 
-struct TennisBallView: View {
-    let isSelected: Bool
-    var body: some View {
-        ZStack {
-            if isSelected { Circle().fill(Color(red: 0.8, green: 1.0, blue: 0.0).opacity(0.3)).blur(radius: 8) }
-            Circle().fill(isSelected ? Color(red: 0.82, green: 0.98, blue: 0.0) : Color.white.opacity(0.15))
-            if isSelected {
-                Image(systemName: "tennisball.fill")
-                    .resizable()
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white.opacity(0.5), Color(red: 0.82, green: 0.98, blue: 0.0))
-                    .padding(3)
-            }
-        }
-    }
-}
-
-struct DetectionBox: View {
-    let confidence: Double
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            DetectionBoxShape().stroke(Color.cyan, lineWidth: 1.5)
-            Text("POS \(Int(confidence * 100))%")
-                .font(.system(size: 6, weight: .black, design: .monospaced))
-                .padding(.horizontal, 3)
-                .padding(.vertical, 1)
-                .background(Color.cyan)
-                .foregroundColor(.black)
-                .offset(y: -8)
-        }
-    }
-}
-
-struct DetectionBoxShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path(); let l: CGFloat = 8
-        path.move(to: CGPoint(x: 0, y: l)); path.addLine(to: .zero); path.addLine(to: CGPoint(x: l, y: 0))
-        path.move(to: CGPoint(x: rect.width - l, y: 0)); path.addLine(to: CGPoint(x: rect.width, y: 0)); path.addLine(to: CGPoint(x: rect.width, y: l))
-        path.move(to: CGPoint(x: rect.width, y: rect.height - l)); path.addLine(to: CGPoint(x: rect.width, y: rect.height)); path.addLine(to: CGPoint(x: rect.width - l, y: rect.height))
-        path.move(to: CGPoint(x: l, y: rect.height)); path.addLine(to: CGPoint(x: 0, y: rect.height)); path.addLine(to: CGPoint(x: 0, y: rect.height - l))
-        return path
-    }
-}
-
-struct ParameterSlider: View {
-    let label: String; @Binding var value: Double; let range: ClosedRange<Double>; let icon: String
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Image(systemName: icon).foregroundColor(.cyan).font(.system(size: 10))
-                Text(label).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.white.opacity(0.5))
+                Image(systemName: icon).font(.system(size: 9)).foregroundColor(.cyan)
+                Text(label).font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(.gray)
                 Spacer()
-                Text("\(Int(value))").font(.system(size: 12, weight: .black, design: .monospaced)).foregroundColor(.cyan)
+                Text(displayValue).font(.system(size: 11, weight: .black, design: .monospaced)).foregroundColor(.white)
             }
-            Slider(value: $value, in: range).tint(.cyan)
-        }.padding(12).background(Color.white.opacity(0.04)).cornerRadius(12)
+            CustomModernBar(value: $value, range: range, isDragging: $isDragging)
+                .frame(height: 20)
+        }
+        .padding(10).background(Color.white.opacity(0.03)).cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isDragging ? Color.cyan.opacity(0.4) : Color.clear, lineWidth: 1))
     }
 }
 
-struct ParameterMiniSlider: View {
-    let label: String; @Binding var value: Double; let range: ClosedRange<Double>
+struct ModernMiniSlider: View {
+    let label: String; @Binding var value: Double; let range: ClosedRange<Double>; let displayValue: String
+    @State private var isDragging = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.white.opacity(0.4))
-            HStack {
-                Slider(value: $value, in: range).tint(.cyan)
-                Text("\(Int(value))").font(.system(size: 10, design: .monospaced)).foregroundColor(.white).frame(width: 25)
+            Text(label).font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(.gray)
+            HStack(spacing: 8) {
+                CustomModernBar(value: $value, range: range, isDragging: $isDragging)
+                Text(displayValue).font(.system(size: 10, design: .monospaced)).foregroundColor(.cyan).frame(width: 28)
             }
-        }.padding(10).background(Color.white.opacity(0.04)).cornerRadius(12)
+        }
+        .padding(10).background(Color.white.opacity(0.03)).cornerRadius(12)
     }
 }
+
+struct CustomModernBar: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    @Binding var isDragging: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.08)).frame(height: 4)
+                
+                Capsule()
+                    .fill(LinearGradient(colors: [.cyan, .blue.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(0, CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound)) * geo.size.width), height: 4)
+                
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: isDragging ? 16 : 12, height: isDragging ? 16 : 12)
+                    .shadow(color: .cyan, radius: isDragging ? 6 : 0)
+                    .offset(x: CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound)) * geo.size.width - 6)
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { val in
+                                isDragging = true
+                                let percent = Double(val.location.x / geo.size.width)
+                                let newValue = range.lowerBound + (range.upperBound - range.lowerBound) * percent
+                                self.value = min(max(range.lowerBound, newValue), range.upperBound)
+                            }
+                            .onEnded { _ in withAnimation { isDragging = false } }
+                    )
+            }
+        }
+    }
+}
+
 
 struct TennisCourtShape: Shape {
     func path(in rect: CGRect) -> Path {

@@ -112,8 +112,7 @@ struct DrillShotCard: View {
     }
 }
 
-// MARK: - DrillScreen
-// MARK: - DrillScreen
+// MARK: - DrillScreen Principal
 struct DrillScreen: View {
     @ObservedObject var communicator: BLECommunicator
     @Binding var shots: [Int : ShotConfig]
@@ -127,25 +126,41 @@ struct DrillScreen: View {
     @State private var isRunning: Bool = false
     @State private var showInstructions: Bool = false
     @State private var dashPhase: CGFloat = 0
+    @State private var isDataLoaded: Bool = false
 
-    // MARK: - Lógica de Formateo SH (Igual que en el Editor)
+    // MARK: - Lógica de Formateo SH (CORREGIDA)
     private func getSHString(for cfg: ShotConfig) -> String {
         let speedBase = Double(cfg.speedAB)
         let spinBias = Double(cfg.spinBias)
         
-        // Cálculo de motores con balance de spin
+        // Motores Mixer
         let vA = mapValue(speedBase + spinBias, from: 0...255, to: 0...99)
         let vB = mapValue(speedBase - spinBias, from: 0...255, to: 0...99)
         
-        // Mapeo de coordenadas y tiempos
+        // Coordenadas
         let xS = mapValue(Double(cfg.targetD), from: 0...255, to: 0...99)
         let yS = mapValue(Double(cfg.targetC), from: 0...255, to: 0...99)
-        let fS = mapValue(Double(cfg.delayE), from: 200...2000, to: 0...99)
+        
+        // CORRECCIÓN: Feed ahora usa base 0...255 para que coincida con el editor
+        let fS = mapValue(Double(cfg.delayE), from: 0...255, to: 0...99)
+        
+        // Otros parámetros
         let cxS = mapValue(cfg.targetF, from: 0...255, to: 0...20)
         let cyS = mapValue(cfg.targetG, from: 0...255, to: 0...20)
         let ctS = mapValue(cfg.targetH, from: 0...255, to: -3000...3000)
         
-        return "[SH\(xS),\(yS),\(vA),\(vB),\(fS),\(cxS),\(cyS),\(ctS)]"
+        let finalCommand = "[SH\(xS),\(yS),\(vA),\(vB),\(fS),\(cxS),\(cyS),\(ctS)]"
+        
+        print("""
+        ---------------------------------
+        🚀 COMANDO GENERADO (MODO DRILL):
+        Original -> Speed: \(cfg.speedAB), Spin: \(cfg.spinBias), Delay: \(cfg.delayE)
+        Mapeado  -> vA: \(vA), vB: \(vB), X: \(xS), Y: \(yS), F: \(fS)
+        String   -> \(finalCommand)
+        ---------------------------------
+        """)
+        
+        return finalCommand
     }
 
     private func mapValue(_ value: Double, from: ClosedRange<Double>, to: ClosedRange<Double>) -> Int {
@@ -159,19 +174,21 @@ struct DrillScreen: View {
 
         ZStack {
             Color.dragonBotBackground.ignoresSafeArea()
+            
             VStack(spacing: 0) {
-                // ... Header existente ...
-                HStack(spacing: 15) {
-                    Button(action: { withAnimation { showInstructions = true } }) { Image(systemName: "questionmark.circle").foregroundColor(.dragonBotPrimary) }
-                }.padding().background(Color.black.opacity(0.5))
-
-                VStack(spacing: 20) {
-                    // ... Controles de Bucle y Modo Drill existentes ...
+                // Header de Conexión
+                VStack(spacing: 4) {
+                    Text("ESTADO DE CONEXIÓN").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.white.opacity(0.4))
                     HStack(spacing: 12) {
-                        Button(action: {
-                            print("DEBUG: Enviando Modo Drill [MD]")
-                            communicator.sendCommand("[MD]")
-                        }) {
+                        Circle().fill(communicator.isConnected ? Color.green : Color.red).frame(width: 14, height: 14).shadow(color: communicator.isConnected ? .green : .red, radius: 4)
+                        Text(communicator.isConnected ? "DRAGONBOT CONECTADA" : "DESCONECTADO").font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(communicator.isConnected ? .green : .red)
+                    }
+                }.frame(maxWidth: .infinity).padding(.vertical, 20).background(Color.black.opacity(0.4))
+
+                VStack(spacing: 15) {
+                    // Controles Superiores
+                    HStack(spacing: 12) {
+                        Button(action: { communicator.sendCommand("[MD]") }) {
                             VStack(spacing: 4) { Image(systemName: "target"); Text("MODO DRILL").font(.system(size: 8, weight: .bold)) }
                             .frame(maxWidth: .infinity).padding(.vertical, 8).background(Color.dragonBotSecondary.opacity(0.2)).foregroundColor(.dragonBotSecondary).cornerRadius(12)
                         }
@@ -189,59 +206,88 @@ struct DrillScreen: View {
                             isInfinite.toggle()
                             communicator.sendCommand(isInfinite ? "[I]" : "[N\(loopCount)]")
                         }) {
-                            VStack(spacing: 4) { Image(systemName: "infinity").font(.system(size: 18, weight: .bold)).foregroundColor(isInfinite ? .dragonBotPrimary : .gray); Text("INFINITO").font(.system(size: 8, weight: .bold)) }.frame(maxWidth: .infinity).padding(.vertical, 8).background(isInfinite ? Color.dragonBotPrimary.opacity(0.15) : Color.white.opacity(0.05)).cornerRadius(12)
+                            VStack(spacing: 4) { Image(systemName: "infinity").font(.system(size: 18, weight: .bold)).foregroundColor(isInfinite ? .dragonBotPrimary : .gray); Text("INFINITO").font(.system(size: 8, weight: .bold)) }
+                            .frame(maxWidth: .infinity).padding(.vertical, 8).background(isInfinite ? Color.dragonBotPrimary.opacity(0.15) : Color.white.opacity(0.05)).cornerRadius(12)
                         }
                     }
 
-                    HStack(spacing: 12) {
-                        Button(action: { print("DEBUG: Reset [Z]"); communicator.sendCommand("[Z]") }) { Image(systemName: "arrow.counterclockwise").frame(width: 50, height: 50).background(Color.white.opacity(0.1)).cornerRadius(12) }
-                        
-                        // --- BOTÓN DE INICIO ACTUALIZADO ---
-                        Button(action: {
-                            if !isRunning {
-                                print("🚀 --- INICIANDO TRANSMISIÓN DE SECUENCIA ---")
-                                for shot in sortedShotList {
-                                    let cmd = getSHString(for: shot)
-                                    print("📡 ENVIANDO TIRO \(shot.shotNumber): \(cmd)")
-                                    communicator.sendCommand(cmd)
-                                }
-                                print("✅ ENVIANDO COMANDO DE DISPARO [S]")
-                                communicator.sendCommand("[S]")
-                            } else {
-                                print("🛑 PARADA DE EMERGENCIA [P]")
-                                communicator.sendCommand("[P]")
+                    // Botones de Acción
+                    VStack(spacing: 12) {
+                        HStack(spacing: 10) {
+                            Button(action: {
+                                communicator.sendCommand("[Z]")
+                                isDataLoaded = false
+                            }) {
+                                VStack(spacing: 4) { Image(systemName: "arrow.counterclockwise"); Text("RESET").font(.system(size: 8, weight: .bold)) }
+                                .frame(width: 60, height: 55).background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(12)
                             }
+                            
+                            Button(action: {
+                                for shot in sortedShotList {
+                                    communicator.sendCommand(getSHString(for: shot))
+                                }
+                                withAnimation { isDataLoaded = true }
+                            }) {
+                                HStack {
+                                    Image(systemName: isDataLoaded ? "checkmark.circle.fill" : "arrow.up.circle.fill")
+                                    Text(isDataLoaded ? "DATOS CARGADOS" : "ENVIAR SECUENCIA").font(.system(size: 12, weight: .black, design: .monospaced))
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 55).background(isDataLoaded ? Color.green.opacity(0.8) : Color.dragonBotSecondary).foregroundColor(.white).cornerRadius(12)
+                            }
+                        }
+                        
+                        Button(action: {
+                            if !isRunning { communicator.sendCommand("[GO]") }
+                            else { communicator.sendCommand("[P]") }
                             isRunning.toggle()
                         }) {
                             HStack {
                                 Image(systemName: isRunning ? "stop.fill" : "play.fill")
-                                Text(isRunning ? "DETENER" : "INICIAR SECUENCIA").font(.system(size: 14, weight: .black, design: .monospaced))
+                                Text(isRunning ? "DETENER" : (isDataLoaded ? "INICIAR SECUENCIA" : "CARGUE DATOS PRIMERO")).font(.system(size: 16, weight: .black, design: .monospaced))
                             }
-                            .frame(maxWidth: .infinity, minHeight: 60)
-                            .background(isRunning ? Color.red : Color.dragonBotPrimary)
-                            .foregroundColor(.black)
-                            .cornerRadius(12)
+                            .frame(maxWidth: .infinity, minHeight: 65)
+                            .background(isRunning ? Color.red : (isDataLoaded ? Color.dragonBotPrimary : Color.gray.opacity(0.3)))
+                            .foregroundColor(isDataLoaded || isRunning ? .black : .white.opacity(0.5)).cornerRadius(12)
+                            .shadow(color: isRunning ? .red.opacity(0.4) : (isDataLoaded ? .dragonBotPrimary.opacity(0.4) : .clear), radius: 10)
                         }
+                        .disabled(!isDataLoaded && !isRunning)
                     }
-                }.padding()
+                }.padding(.horizontal).padding(.top, 15)
 
-                // ... Resto del ScrollView con la lista de tiros ...
-                ScrollView {
+                // Lista de Tiros Scrollable
+                ScrollView(showsIndicators: false) {
                     ZStack(alignment: .topLeading) {
                         if sortedShotList.count > 1 {
-                            LoopPath(count: sortedShotList.count).stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: isRunning ? [10, 6] : [], dashPhase: dashPhase)).foregroundColor(isRunning ? .dragonBotPrimary : .white.opacity(0.2)).frame(width: 60).onAppear { withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { dashPhase -= 16 } }
+                            LoopPath(count: sortedShotList.count)
+                                .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: isRunning ? [10, 6] : [], dashPhase: dashPhase))
+                                .foregroundColor(isRunning ? .dragonBotPrimary : .white.opacity(0.2))
+                                .frame(width: 60)
+                                .onAppear { withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { dashPhase -= 16 } }
                         }
+                        
                         VStack(spacing: 0) {
                             ForEach(Array(sortedShotList.enumerated()), id: \.element.shotNumber) { index, cfg in
-                                DrillShotCard(cfg: cfg, isCurrent: isRunning && index == 0, onEdit: { onConfigShot(cfg.shotNumber) }, onDelete: { onDeleteShot(cfg.shotNumber) })
+                                DrillShotCard(cfg: cfg, isCurrent: isRunning && index == 0, onEdit: { onConfigShot(cfg.shotNumber) }, onDelete: {
+                                    onDeleteShot(cfg.shotNumber)
+                                    isDataLoaded = false
+                                })
                                 if index < sortedShotList.count - 1 {
                                     HStack(spacing: 6) {
-                                        Image(systemName: "clock.arrow.2.circlepath").rotationEffect(.degrees(isRunning ? 360 : 0))
+                                        Image(systemName: "clock.arrow.2.circlepath")
                                         Text("ESPERA: \(String(format: "%.1f", Double(cfg.delayE) / 1000.0))s").font(.system(size: 10, weight: .bold, design: .monospaced))
                                     }.foregroundColor(isRunning ? .dragonBotPrimary : .white.opacity(0.4)).padding(.leading, 70).frame(height: 30)
                                 } else { Spacer().frame(height: 30) }
                             }
-                            Button(action: onAddShot) { Label("AÑADIR NUEVO TIRO", systemImage: "plus.circle.fill").font(.system(size: 14, weight: .bold, design: .monospaced)).padding().frame(maxWidth: .infinity).background(RoundedRectangle(cornerRadius: 15).stroke(Color.dragonBotPrimary, lineWidth: 1)) }.foregroundColor(.dragonBotPrimary).padding(.horizontal).padding(.bottom, 100)
+                            
+                            Button(action: {
+                                onAddShot()
+                                isDataLoaded = false
+                            }) {
+                                Label("AÑADIR NUEVO TIRO", systemImage: "plus.circle.fill")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .padding().frame(maxWidth: .infinity)
+                                    .background(RoundedRectangle(cornerRadius: 15).stroke(Color.dragonBotPrimary, lineWidth: 1))
+                            }.foregroundColor(.dragonBotPrimary).padding(.horizontal).padding(.bottom, 100)
                         }
                     }.padding(.vertical)
                 }

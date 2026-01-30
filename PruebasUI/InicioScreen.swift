@@ -1,4 +1,28 @@
 import SwiftUI
+import AVFoundation
+
+// MARK: - AUDIO MANAGER
+class AudioManager {
+    static let shared = AudioManager()
+    private var player: AVAudioPlayer?
+
+    func playSound(named name: String) {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        guard let url = Bundle.main.url(forResource: name, withExtension: nil) else {
+            print("❌ Error: Archivo de audio \(name) no encontrado.")
+            return
+        }
+
+        do {
+            player = try AVAudioPlayer(contentsOf: url)
+            player?.play()
+        } catch {
+            print("❌ Error: No se pudo reproducir el audio: \(error.localizedDescription)")
+        }
+    }
+}
 
 // MARK: - TEMA DE COLORES
 struct ToothlessTheme {
@@ -11,25 +35,21 @@ struct ToothlessTheme {
 struct InicioScreen: View {
     var onStartClick: () -> Void
     
-    // Estados de la App Principal
     @State private var animatedText: String = ""
     @State private var buttonOpacity: Double = 0.0
     @State private var showIntro = true
     
-    // Estados para la Intro de Soldadura (Blanca)
     @State private var solderingProgress: CGFloat = 0.0
     @State private var introOpacity: Double = 1.0
     @State private var logoOpacity: Double = 0.0
     @State private var sparkOpacity: Double = 0.0
     
-    // Estados para el Robot y Fondo
     @State private var robotRotationY: Double = 0
     @State private var gridPhase: CGFloat = 0
     @State private var currentSubtitleIndex = 0
     @State private var subtitleOpacity: Double = 0.0
     @State private var scanLineY: CGFloat = 0
     
-    // IA YOLO DETECTION
     @State private var targetBasePos: CGPoint = .zero
     @State private var isTargetDetected = false
     @State private var currentLabel: String = "TARGET_BOT"
@@ -43,42 +63,42 @@ struct InicioScreen: View {
 
     var body: some View {
         ZStack {
-            // Fondo dinámico
             (showIntro ? Color.white : ToothlessTheme.deepBlack)
                 .ignoresSafeArea()
                 .animation(.easeInOut(duration: 1.2), value: showIntro)
             
             if showIntro {
-                // MARK: - CAPA DE INTRO (EFECTO SOLDADURA)
-                VStack(spacing: 40) {
+                // MARK: - CAPA DE INTRO (LOGO GRANDE Y CERCA DEL TEXTO)
+                VStack(spacing: 0) { // Spacing en 0 para pegar el texto al logo
+                    // Logo aumentado a 400
+                    Image("Rems2")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 300, height: 300)
+                        .grayscale(1.0)
+                        .opacity(logoOpacity)
+                        .scaleEffect(0.85 + (logoOpacity * 0.15))
+                        .offset(y: 20) // Ajuste fino opcional si la imagen tiene mucho aire abajo
+                    
                     ZStack {
-                        // Texto base gris tenue para la "guía"
+                        // Texto base gris tenue
                         Text(brandName)
                             .font(.system(size: 42, weight: .light, design: .monospaced))
                             .tracking(12)
                             .foregroundColor(.black.opacity(0.05))
                         
-                        // Texto que se "suelda" (revelado por máscara)
+                        // Texto que se "suelda"
                         SolderingText(text: brandName, progress: solderingProgress)
                         
-                        // Punto de chispa/calor
+                        // Punto de chispa
                         SparkPoint(progress: solderingProgress, textWidth: 320)
                             .opacity(sparkOpacity)
                     }
                     .frame(width: 320)
-                    
-                    Image("Rems2")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 140, height: 140)
-                        .grayscale(1.0)
-                        .opacity(logoOpacity)
-                        .scaleEffect(0.8 + (logoOpacity * 0.2))
                 }
                 .opacity(introOpacity)
                 
             } else {
-                // MARK: - VISTA PRINCIPAL (DRAGONBOT)
                 mainContent
             }
             
@@ -89,27 +109,31 @@ struct InicioScreen: View {
         .onAppear { runSolderingSequence() }
     }
 
-    // MARK: - LÓGICA DE INTRO MEJORADA
     func runSolderingSequence() {
-        // 1. Iniciar efecto de soldadura
+        // Asegúrate de que la extensión sea la correcta (.mp4) si así es tu archivo
+        AudioManager.shared.playSound(named: "RemsAud.mp4")
+
         withAnimation(.easeIn(duration: 0.5)) {
             sparkOpacity = 1.0
         }
         
-        // Animamos el progreso de la máscara
         withAnimation(.linear(duration: 2.5)) {
             solderingProgress = 1.0
         }
         
-        // 2. Aparece el logo naturalmente
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+        // El logo aparece un poco antes de que termine la soldadura para un efecto fluido
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
                 logoOpacity = 1.0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation(.easeOut(duration: 0.3)) {
                 sparkOpacity = 0.0
             }
         }
         
-        // 3. Transición a la App Principal
         DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
             withAnimation(.easeInOut(duration: 1.5)) {
                 introOpacity = 0.0
@@ -135,7 +159,6 @@ struct InicioScreen: View {
         startSubtitleCycle()
     }
 
-    // Vista principal separada para orden
     var mainContent: some View {
         ZStack {
             StarFieldView()
@@ -203,16 +226,33 @@ struct InicioScreen: View {
         }.padding(.bottom, 30)
     }
     
-    // Funciones auxiliares igual que antes
-    func startSubtitleCycle() { /* ... */ }
-    func startYOLOSimulation() { /* ... */ }
+    func startSubtitleCycle() {
+        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            withAnimation(.easeInOut(duration: 0.5)) { subtitleOpacity = 0 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                currentSubtitleIndex = (currentSubtitleIndex + 1) % dynamicSubtitles.count
+                withAnimation(.easeInOut(duration: 0.5)) { subtitleOpacity = 1.0 }
+            }
+        }
+    }
+
+    func startYOLOSimulation() {
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            if !isTargetDetected {
+                targetBasePos = CGPoint(x: CGFloat.random(in: 100...300), y: CGFloat.random(in: 250...500))
+                isTargetDetected = true
+            }
+            jitterPos = CGSize(width: CGFloat.random(in: -5...5), height: CGFloat.random(in: -5...5))
+            jitterScale = CGFloat.random(in: 0.98...1.02)
+            confidence = Double.random(in: 0.95...0.99)
+        }
+    }
 }
 
-// MARK: - COMPONENTES DE EFECTO SOLDADURA
+// MARK: - COMPONENTES AUXILIARES
 struct SolderingText: View {
     let text: String
     let progress: CGFloat
-    
     var body: some View {
         Text(text)
             .font(.system(size: 42, weight: .light, design: .monospaced))
@@ -234,16 +274,9 @@ struct SolderingText: View {
 struct SparkPoint: View {
     let progress: CGFloat
     let textWidth: CGFloat
-    
     var body: some View {
         ZStack {
-            // El "Calor" de la soldadura
-            Circle()
-                .fill(Color.black)
-                .frame(width: 4, height: 4)
-                .blur(radius: 1)
-            
-            // Chispas simuladas (Mini cenizas)
+            Circle().fill(Color.black).frame(width: 4, height: 4).blur(radius: 1)
             ForEach(0..<6) { i in
                 Circle()
                     .fill(Color.black.opacity(0.6))
@@ -256,43 +289,24 @@ struct SparkPoint: View {
     }
 }
 
-// (Siguen el resto de componentes originales: YOLOBoundingBox, StarFieldView, etc.)
-
-// MARK: - COMPONENTES DINÁMICOS
 struct YOLOBoundingBox: View {
     var basePos: CGPoint
     var label: String
     var jitterPos: CGSize
     var jitterScale: CGFloat
     var confidence: Double
-    
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Marco principal
-            Rectangle()
-                .stroke(ToothlessTheme.dragonEyeGreen, lineWidth: 2)
-                .background(ToothlessTheme.dragonEyeGreen.opacity(0.1))
-            
-            // Etiqueta de clase y confianza
+            Rectangle().stroke(ToothlessTheme.dragonEyeGreen, lineWidth: 2).background(ToothlessTheme.dragonEyeGreen.opacity(0.1))
             HStack(spacing: 4) {
-                Text(label)
-                Text(String(format: "%.2f", confidence))
+                Text(label); Text(String(format: "%.2f", confidence))
             }
             .font(.system(size: 10, weight: .bold, design: .monospaced))
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(ToothlessTheme.dragonEyeGreen)
-            .foregroundColor(.black)
-            .offset(y: -18)
-            
-            // Esquinas de enfoque adicionales (efecto visual extra)
+            .padding(.horizontal, 4).padding(.vertical, 2)
+            .background(ToothlessTheme.dragonEyeGreen).foregroundColor(.black).offset(y: -18)
             BoxCorners().stroke(ToothlessTheme.dragonEyeGreen, lineWidth: 1)
         }
-        .frame(width: 130, height: 130)
-        .scaleEffect(jitterScale)
-        .offset(jitterPos)
-        .position(x: basePos.x, y: basePos.y)
-        .animation(.interactiveSpring(response: 0.1, dampingFraction: 0.5), value: jitterPos)
+        .frame(width: 130, height: 130).scaleEffect(jitterScale).offset(jitterPos).position(x: basePos.x, y: basePos.y)
     }
 }
 
@@ -300,50 +314,31 @@ struct BoxCorners: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let l: CGFloat = 15.0
-        // Arriba Izq
         path.move(to: CGPoint(x: 0, y: l)); path.addLine(to: .zero); path.addLine(to: CGPoint(x: l, y: 0))
-        // Arriba Der
         path.move(to: CGPoint(x: rect.width - l, y: 0)); path.addLine(to: CGPoint(x: rect.width, y: 0)); path.addLine(to: CGPoint(x: rect.width, y: l))
-        // Abajo Izq
         path.move(to: CGPoint(x: 0, y: rect.height - l)); path.addLine(to: CGPoint(x: 0, y: rect.height)); path.addLine(to: CGPoint(x: l, y: rect.height))
-        // Abajo Der
         path.move(to: CGPoint(x: rect.width - l, y: rect.height)); path.addLine(to: CGPoint(x: rect.width, y: rect.height)); path.addLine(to: CGPoint(x: rect.width, y: rect.height - l))
         return path
     }
 }
 
 struct SocialLinkView: View {
-    let icon: String
-    let title: String
-    let url: String
-    
+    let icon: String; let title: String; let url: String
     var body: some View {
-        Button(action: {
-            if let link = URL(string: url) { UIApplication.shared.open(link) }
-        }) {
+        Button(action: { if let link = URL(string: url) { UIApplication.shared.open(link) } }) {
             VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundColor(ToothlessTheme.plasmaBlue)
-                
-                Text(title)
-                    .font(.system(size: 8, weight: .black, design: .monospaced))
-                    .foregroundColor(ToothlessTheme.plasmaBlue)
-                    .padding(.bottom, 2)
-                    .overlay(Rectangle().fill(ToothlessTheme.plasmaBlue.opacity(0.3)).frame(height: 1), alignment: .bottom)
+                Image(systemName: icon).font(.system(size: 18)).foregroundColor(ToothlessTheme.plasmaBlue)
+                Text(title).font(.system(size: 8, weight: .black, design: .monospaced)).foregroundColor(ToothlessTheme.plasmaBlue)
+                    .padding(.bottom, 2).overlay(Rectangle().fill(ToothlessTheme.plasmaBlue.opacity(0.3)).frame(height: 1), alignment: .bottom)
             }
         }
     }
 }
 
 struct RobotPhysicalView: View {
-    var imageName: String
-    var rotationY: Double
+    var imageName: String; var rotationY: Double
     var body: some View {
-        Image(imageName)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: 270, height: 270)
+        Image(imageName).resizable().aspectRatio(contentMode: .fit).frame(width: 270, height: 270)
             .rotation3DEffect(.degrees(rotationY), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
             .shadow(color: ToothlessTheme.plasmaBlue.opacity(0.3), radius: 25)
     }
@@ -353,8 +348,7 @@ struct StarFieldView: View {
     var body: some View {
         Canvas { context, size in
             for _ in 0..<75 {
-                let x = CGFloat.random(in: 0...size.width)
-                let y = CGFloat.random(in: 0...size.height)
+                let x = CGFloat.random(in: 0...size.width); let y = CGFloat.random(in: 0...size.height)
                 let starSize = CGFloat.random(in: 1.2...2.5)
                 context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: starSize, height: starSize)), with: .color(.white.opacity(Double.random(in: 0.5...1.0))))
             }

@@ -29,9 +29,30 @@
 		D8A1B6A42ED82776007E4C49 /* PruebasUIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PruebasUIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D859D9D42F2CAC5C0001C4D5 /* Exceptions for "PruebasUI" folder in "PruebasUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				RemsAud.mp4,
+			);
+			target = D8A1B6992ED82776007E4C49 /* PruebasUITests */;
+		};
+		D859D9D52F2CAC5C0001C4D5 /* Exceptions for "PruebasUI" folder in "PruebasUIUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				RemsAud.mp4,
+			);
+			target = D8A1B6A32ED82776007E4C49 /* PruebasUIUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D8A1B68C2ED82774007E4C49 /* PruebasUI */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D859D9D42F2CAC5C0001C4D5 /* Exceptions for "PruebasUI" folder in "PruebasUITests" target */,
+				D859D9D52F2CAC5C0001C4D5 /* Exceptions for "PruebasUI" folder in "PruebasUIUITests" target */,
+			);
 			path = PruebasUI;
 			sourceTree = "<group>";
 		};
