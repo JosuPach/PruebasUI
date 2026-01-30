@@ -96,7 +96,7 @@ struct ShotConfigScreen: View {
         shotConfig.targetD = dValues[selectedRow]
         shotConfig.targetC = cValues[selectedCol]
 
-        communicator.sendCommand(shString)
+        //communicator.sendCommand(shString)
         onSaveConfig(shotConfig)
         dismiss()
     }
@@ -125,9 +125,9 @@ struct ShotConfigScreen: View {
                                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                                     .foregroundColor(.cyan).opacity(0.8)
                                 
-                                ParameterSlider(label: "VELOCIDAD (A + B)", value: $speedBaseTemp, range: 0...255, icon: "bolt.fill")
+                                ParameterSlider(label: "VELOCIDAD DE DISPARO", value: $speedBaseTemp, range: 0...255, icon: "bolt.fill")
                                 
-                                ParameterSlider(label: "BALANCE DE SPIN (OFFSET)", value: $spinBiasTemp, range: -127...127, icon: "arrow.up.and.down.righttriangle.up.righttriangle.down.fill")
+                                ParameterSlider(label: "SPIN (OFFSET)", value: $spinBiasTemp, range: -127...127, icon: "arrow.up.and.down.righttriangle.up.righttriangle.down.fill")
                                     .overlay(
                                         Text(spinBiasTemp > 0 ? "TOP" : (spinBiasTemp < 0 ? "BACK" : "NEUTRO"))
                                             .font(.system(size: 8, weight: .bold, design: .monospaced))
@@ -141,11 +141,11 @@ struct ShotConfigScreen: View {
                             ParameterSlider(label: "INTERVALO DISPARO (ms)", value: $delayTemp, range: 200...2000, icon: "clock")
                             
                             HStack(spacing: 10) {
-                                ParameterMiniSlider(label: "OFFSET F", value: $targetFTemp, range: 0...255)
-                                ParameterMiniSlider(label: "OFFSET G", value: $targetGTemp, range: 0...255)
+                                ParameterMiniSlider(label: "CARTRACK X", value: $targetFTemp, range: 0...255)
+                                ParameterMiniSlider(label: "CARTRACK Y", value: $targetGTemp, range: 0...255)
                             }
                             
-                            ParameterSlider(label: "GIRO CABEZAL (H)", value: $targetHTemp, range: 0...255, icon: "rotate.right.fill")
+                            ParameterSlider(label: "RETARDO ENTRE DISPARO", value: $targetHTemp, range: 0...255, icon: "rotate.right.fill")
                         }
                         .padding(.horizontal)
 
@@ -168,7 +168,7 @@ struct ShotConfigScreen: View {
     private var headerView: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("DRAGONBOT VISION OS").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(Color.cyan)
+                Text("DRAGONBOT").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(Color.cyan)
                 Text("MIXER DE TIRO").font(.system(size: 22, weight: .black, design: .monospaced)).foregroundColor(.white)
             }
             Spacer()
