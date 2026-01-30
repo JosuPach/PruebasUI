@@ -162,9 +162,6 @@ struct DrillScreen: View {
             VStack(spacing: 0) {
                 // ... Header existente ...
                 HStack(spacing: 15) {
-                    Button(action: onBackClick) { Image(systemName: "chevron.left").font(.system(size: 18, weight: .bold)).foregroundColor(.white) }
-                    Text("RED DE ENTRENAMIENTO").font(.system(size: 14, weight: .black, design: .monospaced)).foregroundColor(.white)
-                    Spacer()
                     Button(action: { withAnimation { showInstructions = true } }) { Image(systemName: "questionmark.circle").foregroundColor(.dragonBotPrimary) }
                 }.padding().background(Color.black.opacity(0.5))
 

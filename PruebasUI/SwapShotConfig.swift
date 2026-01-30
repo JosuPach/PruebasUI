@@ -66,6 +66,9 @@ struct SwapConfigScreen: View {
     @State private var editingSwap: Int? = nil
     @State private var tempConfig = SwapConfig()
     @State private var showInstructions: Bool = false
+    
+    // Estados para la animación de la cancha
+    @State private var pulseAnim: CGFloat = 1.0
 
     var body: some View {
         ZStack {
@@ -76,6 +79,7 @@ struct SwapConfigScreen: View {
 
                 ScrollView {
                     VStack(spacing: 25) {
+                        // Sección de botones de ejecución
                         VStack(spacing: 12) {
                             actionButton(title: "MODO SWAP", icon: "bolt.horizontal.fill", color: .blue) {
                                 communicator.sendCommand("[WA]")
@@ -101,6 +105,7 @@ struct SwapConfigScreen: View {
                 }
             }
 
+            // Editor Modal con Cancha
             if let id = editingSwap {
                 editorModal(id: id)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -111,42 +116,22 @@ struct SwapConfigScreen: View {
                 instructionsPopup
             }
         }
-    }
-
-    private var headerView: some View {
-        HStack {
-            Button(action: { onClose(); dismiss() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.left")
-                    Text("VOLVER")
-                }
-            }
-            .font(.system(size: 13, weight: .bold, design: .monospaced))
-            .foregroundColor(.cyan)
-            
-            Spacer()
-            Text("CONTROL SWAP").font(.system(size: 13, weight: .black, design: .monospaced)).foregroundColor(.white)
-            Spacer()
-            
-            Button(action: { withAnimation(.spring()) { showInstructions = true } }) {
-                Image(systemName: "questionmark.circle").font(.system(size: 18)).foregroundColor(.cyan)
-            }
-            .padding(.trailing, 8)
-
-            Circle().fill(communicator.isConnected ? Color.green : .red).frame(width: 8, height: 8)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) { pulseAnim = 2.5 }
         }
-        .padding().background(Color.black.opacity(0.8))
     }
 
+    // MARK: - Editor con Preview de Cancha
     @ViewBuilder
     private func editorModal(id: Int) -> some View {
         ZStack {
-            Color.black.opacity(0.8).ignoresSafeArea().onTapGesture { editingSwap = nil }
+            Color.black.opacity(0.85).ignoresSafeArea().onTapGesture { editingSwap = nil }
             
             VStack(spacing: 0) {
+                // Header del Editor
                 HStack {
                     VStack(alignment: .leading) {
-                        Text("CONFIGURACIÓN_AVANZADA").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.gray)
+                        Text("CONFIGURACIÓN_VISUAL").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.gray)
                         Text("CANAL_0\(id)").font(.system(size: 18, weight: .black, design: .monospaced)).foregroundColor(.cyan)
                     }
                     Spacer()
@@ -156,59 +141,97 @@ struct SwapConfigScreen: View {
                 }
                 .padding().background(Color.white.opacity(0.05))
 
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(spacing: 24) {
-                        // Grupo de Potencia con el nuevo Mixer
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        
+                        // --- PREVIEW DE CANCHA ---
+                        courtPreviewSection
+                        
+                        // Grupo de Potencia
                         parameterGroup(title: "SISTEMA_DE_LANZAMIENTO_MIXER") {
-                            parameterSlider(label: "VELOCIDAD BASE (A+B)", value: $tempConfig.power, id: "p", range: 0...255)
-                            
-                            // Nuevo Slider de Spin independiente
-                            parameterSlider(label: "BALANCE DE SPIN (OFF)", value: $tempConfig.spin, id: "spin", range: -127...127)
-                                .overlay(
-                                    Text("TOP / BACK")
-                                        .font(.system(size: 7, weight: .bold, design: .monospaced))
-                                        .foregroundColor(.cyan.opacity(0.5))
-                                        .offset(y: -15), alignment: .topTrailing
-                                )
+                            parameterSlider(label: "VELOCIDAD BASE", value: $tempConfig.power, id: "p", range: 0...255)
+                            parameterSlider(label: "BALANCE DE SPIN", value: $tempConfig.spin, id: "spin", range: -127...127)
                         }
 
+                        // Grupo de Posición (Los que mueven la pelota en la cancha)
                         parameterGroup(title: "POSICIÓN_REJILLA") {
-                            parameterSlider(label: "X-AXIS (0-99)", value: $tempConfig.x, id: "x", range: 0...255)
-                            parameterSlider(label: "Y-AXIS (0-99)", value: $tempConfig.y, id: "y", range: 0...255)
+                            parameterSlider(label: "EJE X (ANCHO)", value: $tempConfig.x, id: "x", range: 0...255)
+                            parameterSlider(label: "EJE Y (PROFUNDIDAD)", value: $tempConfig.y, id: "y", range: 0...255)
                         }
                         
                         parameterGroup(title: "MOVIMIENTO_Y_GIRO") {
-                            parameterSlider(label: "CADENCIA (0-99)", value: $tempConfig.feed, id: "f", range: 0...255)
-                            parameterSlider(label: "OFFSET CARTRACK X", value: $tempConfig.cx, id: "cx", range: 0...255)
-                            parameterSlider(label: "OFFSET CARTRACK Y", value: $tempConfig.cy, id: "cy", range: 0...255)
+                            parameterSlider(label: "CADENCIA", value: $tempConfig.feed, id: "f", range: 0...255)
                             parameterSlider(label: "GIRO CARTRACK (H)", value: $tempConfig.ct, id: "ct", range: 0...255)
                         }
                     }
                     .padding(20)
                 }
-                .frame(maxHeight: 500)
 
+                // Footer con Comando y Botón Guardar
                 VStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("CADENA_MIXER_RESULTANTE").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.gray)
-                        Text(tempConfig.generateCommand())
-                            .font(.system(size: 14, weight: .black, design: .monospaced))
-                            .foregroundColor(.cyan)
-                            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.black.opacity(0.4)).cornerRadius(8)
-                    }
+                    Text(tempConfig.generateCommand())
+                        .font(.system(size: 13, weight: .black, design: .monospaced))
+                        .foregroundColor(.cyan)
+                        .padding(10).frame(maxWidth: .infinity).background(Color.black.opacity(0.4)).cornerRadius(8)
                     
                     Button(action: { saveChanges(id: id) }) {
-                        Text("ACTUALIZAR CANAL").font(.system(size: 14, weight: .black, design: .monospaced)).frame(maxWidth: .infinity).padding(.vertical, 14).background(Color.cyan).foregroundColor(.black).cornerRadius(10)
+                        Text("ACTUALIZAR DISPARO").font(.system(size: 14, weight: .black, design: .monospaced)).frame(maxWidth: .infinity).padding(.vertical, 14).background(Color.cyan).foregroundColor(.black).cornerRadius(10)
                     }
                 }
                 .padding(20).background(Color(red: 0.1, green: 0.1, blue: 0.12))
             }
             .background(Color(red: 0.07, green: 0.07, blue: 0.09))
-            .cornerRadius(20).padding(.horizontal, 20)
+            .cornerRadius(24).padding(.horizontal, 15).padding(.vertical, 40)
         }
     }
 
+    // MARK: - Componente de Cancha para Swap
+    private var courtPreviewSection: some View {
+        ZStack {
+            // Dibujo de la cancha (Reutilizando tus formas)
+            ZStack(alignment: .bottom) {
+                TennisCourtShape()
+                    .fill(Color.cyan.opacity(0.1))
+                    .overlay(TennisCourtLines().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                
+                // Representación de la Pelota
+                // Mapeamos 0-255 a la posición relativa de la vista
+                GeometryReader { geo in
+                    let ballX = CGFloat(tempConfig.x / 255.0) * geo.size.width
+                    let ballY = (1.0 - CGFloat(tempConfig.y / 255.0)) * geo.size.height
+                    
+                    ZStack {
+                        Circle()
+                            .stroke(Color.cyan, lineWidth: 1)
+                            .frame(width: 15, height: 15)
+                            .scaleEffect(pulseAnim)
+                            .opacity(2.5 - pulseAnim)
+                        
+                        Circle()
+                            .fill(Color(red: 0.82, green: 0.98, blue: 0.0))
+                            .frame(width: 10, height: 10)
+                            .shadow(color: .black, radius: 2)
+                    }
+                    .position(x: ballX, y: ballY)
+                }
+            }
+            .frame(height: 160)
+            .padding(10)
+            .background(Color.black.opacity(0.3))
+            .cornerRadius(12)
+            
+            // Etiqueta de posición
+            VStack {
+                HStack {
+                    Text("PREVIEW_IMPACTO").font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(.cyan)
+                    Spacer()
+                }
+                Spacer()
+            }.padding(8)
+        }
+    }
+
+    // ... (Mantén tus funciones privadas como headerView, openEditor, saveChanges, etc. igual)
     private func openEditor(id: Int) {
         tempConfig = (id == 1) ? channel1 : channel2
         editingSwap = id
@@ -244,7 +267,7 @@ struct SwapConfigScreen: View {
             Slider(value: value, in: range, step: 1).accentColor(.cyan)
         }
     }
-
+    
     private func actionButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack { Image(systemName: icon); Text(title) }
@@ -253,7 +276,23 @@ struct SwapConfigScreen: View {
             .background(color.opacity(0.15)).foregroundColor(color).cornerRadius(10)
         }
     }
+    
+    private var headerView: some View {
+        HStack {
+            Spacer()
+            Text("CONTROL SWAP").font(.system(size: 13, weight: .black, design: .monospaced)).foregroundColor(.white)
+            Spacer()
+            
+            Button(action: { withAnimation(.spring()) { showInstructions = true } }) {
+                Image(systemName: "questionmark.circle").font(.system(size: 18)).foregroundColor(.cyan)
+            }
+            .padding(.trailing, 8)
 
+            Circle().fill(communicator.isConnected ? Color.green : .red).frame(width: 8, height: 8)
+        }
+        .padding().background(Color.black.opacity(0.8))
+    }
+    
     private var instructionsPopup: some View {
         ZStack {
             Color.black.opacity(0.85).ignoresSafeArea().onTapGesture { withAnimation { showInstructions = false } }
