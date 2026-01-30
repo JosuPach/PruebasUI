@@ -245,6 +245,65 @@ struct ModernParameterSlider: View {
     }
 }
 
+
+
+struct CustomModernBar: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    @Binding var isDragging: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            // Definimos el radio de la bolita para los cálculos
+            let thumbRadius: CGFloat = 8
+            // Calculamos el ancho útil restando el espacio que ocupa la bolita en los extremos
+            let usableWidth = geo.size.width - (thumbRadius * 2)
+            
+            // Calculamos el porcentaje actual (0.0 a 1.0)
+            let percentage = CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound))
+            
+            ZStack(alignment: .leading) {
+                // Fondo de la barra
+                Capsule()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 4)
+                
+                // Progreso
+                Capsule()
+                    .fill(LinearGradient(colors: [.cyan, .blue.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(0, percentage * usableWidth + thumbRadius), height: 4)
+                
+                // Bolita (Thumb)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: isDragging ? 16 : 12, height: isDragging ? 16 : 12)
+                    .shadow(color: .cyan.opacity(isDragging ? 0.8 : 0), radius: 6)
+                    // El offset ahora se mueve solo dentro del usableWidth
+                    .offset(x: percentage * usableWidth)
+            }
+            // Centramos el contenido verticalmente
+            .frame(maxHeight: .infinity)
+            // Añadimos un padding horizontal para que la bolita no toque el borde del contenedor
+            .padding(.horizontal, 0)
+            .contentShape(Rectangle()) // Hace que toda el área sea táctil
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { val in
+                        isDragging = true
+                        // Ajustamos el cálculo del toque para que coincida con el área útil
+                        let dragLocation = val.location.x - thumbRadius
+                        let percent = Double(dragLocation / usableWidth)
+                        let newValue = range.lowerBound + (range.upperBound - range.lowerBound) * percent
+                        self.value = min(max(range.lowerBound, newValue), range.upperBound)
+                    }
+                    .onEnded { _ in
+                        withAnimation(.spring(response: 0.2)) { isDragging = false }
+                    }
+            )
+        }
+    }
+}
+
 struct ModernMiniSlider: View {
     let label: String; @Binding var value: Double; let range: ClosedRange<Double>; let displayValue: String
     @State private var isDragging = false
@@ -258,40 +317,6 @@ struct ModernMiniSlider: View {
             }
         }
         .padding(10).background(Color.white.opacity(0.03)).cornerRadius(12)
-    }
-}
-
-struct CustomModernBar: View {
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    @Binding var isDragging: Bool
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.08)).frame(height: 4)
-                
-                Capsule()
-                    .fill(LinearGradient(colors: [.cyan, .blue.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: max(0, CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound)) * geo.size.width), height: 4)
-                
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: isDragging ? 16 : 12, height: isDragging ? 16 : 12)
-                    .shadow(color: .cyan, radius: isDragging ? 6 : 0)
-                    .offset(x: CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound)) * geo.size.width - 6)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { val in
-                                isDragging = true
-                                let percent = Double(val.location.x / geo.size.width)
-                                let newValue = range.lowerBound + (range.upperBound - range.lowerBound) * percent
-                                self.value = min(max(range.lowerBound, newValue), range.upperBound)
-                            }
-                            .onEnded { _ in withAnimation { isDragging = false } }
-                    )
-            }
-        }
     }
 }
 
