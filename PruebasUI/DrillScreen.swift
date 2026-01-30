@@ -1,5 +1,73 @@
 import SwiftUI
 
+// MARK: - Forma para el Camino del Bucle
+struct LoopPath: Shape {
+    let count: Int
+    let stepHeight: CGFloat = 114 // Altura de tarjeta (aprox 84) + spacing (30)
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard count > 0 else { return path }
+        
+        let xPos: CGFloat = 41 // Alineado con el centro del círculo del número
+        let firstCircleY: CGFloat = 45
+        let lastCircleY: CGFloat = firstCircleY + CGFloat(count - 1) * stepHeight
+        
+        // 1. Línea vertical que conecta los tiros
+        path.move(to: CGPoint(x: xPos, y: firstCircleY))
+        path.addLine(to: CGPoint(x: xPos, y: lastCircleY))
+        
+        // 2. Dibujar flechas pequeñas entre cada tiro
+        if count > 1 {
+            for i in 0..<count-1 {
+                let midY = firstCircleY + CGFloat(i) * stepHeight + (stepHeight / 2)
+                drawArrowHead(at: CGPoint(x: xPos, y: midY), in: &path)
+            }
+        }
+        
+        // 3. El camino de retorno (Efecto Loop)
+        if count > 1 {
+            let loopWidth: CGFloat = 30
+            let cornerRadius: CGFloat = 15
+            
+            // Salida desde el último tiro hacia la izquierda
+            path.move(to: CGPoint(x: xPos, y: lastCircleY))
+            path.addLine(to: CGPoint(x: xPos - loopWidth + cornerRadius, y: lastCircleY))
+            
+            // Curva inferior izquierda
+            path.addArc(center: CGPoint(x: xPos - loopWidth + cornerRadius, y: lastCircleY - cornerRadius),
+                        radius: cornerRadius, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+            
+            // Línea vertical de subida
+            path.addLine(to: CGPoint(x: xPos - loopWidth, y: firstCircleY + cornerRadius))
+            
+            // Curva superior izquierda
+            path.addArc(center: CGPoint(x: xPos - loopWidth + cornerRadius, y: firstCircleY + cornerRadius),
+                        radius: cornerRadius, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+            
+            // Línea final hacia el primer tiro
+            path.addLine(to: CGPoint(x: xPos - 8, y: firstCircleY))
+            
+            // Punta de flecha de llegada al primer tiro
+            drawArrowHead(at: CGPoint(x: xPos - 8, y: firstCircleY), in: &path, horizontal: true)
+        }
+        
+        return path
+    }
+    
+    private func drawArrowHead(at point: CGPoint, in path: inout Path, horizontal: Bool = false) {
+        if horizontal {
+            path.move(to: CGPoint(x: point.x - 5, y: point.y - 4))
+            path.addLine(to: CGPoint(x: point.x, y: point.y))
+            path.addLine(to: CGPoint(x: point.x - 5, y: point.y + 4))
+        } else {
+            path.move(to: CGPoint(x: point.x - 4, y: point.y - 5))
+            path.addLine(to: CGPoint(x: point.x, y: point.y))
+            path.addLine(to: CGPoint(x: point.x + 4, y: point.y - 5))
+        }
+    }
+}
+
 struct DrillScreen: View {
     @ObservedObject var communicator: BLECommunicator
     @Binding var shots: [Int : ShotConfig]
@@ -14,77 +82,38 @@ struct DrillScreen: View {
     @State private var isRunning: Bool = false
     @State private var flowPhase: CGFloat = 0
     
-    @State private var intervalSeconds: Double = 3.0
     @State private var currentShotIndex: Int = 0
-    @State private var currentLoop: Int = 0
-    @State private var countdownValue: Int = 0
-    @State private var timerSubscription: Timer?
-    
-    // Estado para el popup de instrucciones
     @State private var showInstructions: Bool = false
 
-    // Mapeo manual de configuración a comando de texto [SH...]
     private func generateCommand(for cfg: ShotConfig) -> String {
         let xScaled = Int((Double(cfg.targetC) / 255.0) * 99)
         let yScaled = Int((Double(cfg.targetD) / 255.0) * 99)
         let v1Scaled = Int((Double(cfg.speedAB) / 255.0) * 99)
-        let v2Scaled = v1Scaled
         let feedScaled = Int((Double(cfg.delayE) / 2000.0) * 99)
         let cx = Int((Double(cfg.targetF) / 255.0) * 20)
         let cy = Int((Double(cfg.targetG) / 255.0) * 20)
         let ct = Int((Double(cfg.targetH) / 255.0) * 6000) - 3000
         
-        return "[SH\(xScaled),\(yScaled),\(v1Scaled),\(v2Scaled),\(feedScaled),\(cx),\(cy),\(ct)]"
+        return "[SH\(xScaled),\(yScaled),\(v1Scaled),\(v1Scaled),\(feedScaled),\(cx),\(cy),\(ct)]"
     }
 
     private func startDrill() {
         guard communicator.isConnected && !shots.isEmpty else { return }
-        
-        if isInfinite {
-            communicator.sendCommand("[I]")
-        } else {
-            let loopCmd = String(format: "[N%02d]", loopCount)
-            communicator.sendCommand(loopCmd)
-        }
-        
-        communicator.sendCommand("[GO]")
-        
-        withAnimation { isRunning = true }
-        currentShotIndex = 0
-        currentLoop = 0
-        countdownValue = 0
+        if isInfinite { communicator.sendCommand("[I]") }
+        else { communicator.sendCommand(String(format: "[N%02d]", loopCount)) }
         
         let sortedShots = shots.values.sorted { $0.shotNumber < $1.shotNumber }
-        
-        timerSubscription = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if countdownValue > 0 {
-                countdownValue -= 1
-            } else {
-                if currentShotIndex < sortedShots.count {
-                    let config = sortedShots[currentShotIndex]
-                    let command = generateCommand(for: config)
-                    communicator.sendCommand(command)
-                    currentShotIndex += 1
-                    countdownValue = Int(intervalSeconds)
-                } else {
-                    currentLoop += 1
-                    if isInfinite || currentLoop < loopCount {
-                        currentShotIndex = 0
-                    } else {
-                        stopDrill()
-                    }
-                }
-            }
+        for config in sortedShots {
+            communicator.sendCommand(generateCommand(for: config))
         }
+        communicator.sendCommand("[GO]")
+        withAnimation { isRunning = true }
     }
 
     private func stopDrill() {
-        timerSubscription?.invalidate()
-        timerSubscription = nil
         communicator.sendCommand("[STOP]")
         withAnimation {
             isRunning = false
-            countdownValue = 0
             currentShotIndex = 0
         }
     }
@@ -96,7 +125,7 @@ struct DrillScreen: View {
             Color.dragonBotBackground.ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Header con Botón de Ayuda
+                // MARK: - Header
                 HStack(spacing: 15) {
                     Button(action: onBackClick) {
                         Image(systemName: "chevron.left")
@@ -110,7 +139,6 @@ struct DrillScreen: View {
                     
                     Spacer()
                     
-                    // Botón de Ayuda Manual
                     Button(action: { withAnimation(.spring()) { showInstructions = true } }) {
                         HStack(spacing: 4) {
                             Image(systemName: "questionmark.circle")
@@ -132,8 +160,8 @@ struct DrillScreen: View {
                 .padding()
                 .background(Color.black.opacity(0.5))
 
-                // Panel Control
-                VStack(spacing: 15) {
+                // MARK: - Panel de Control
+                VStack(spacing: 20) {
                     HStack(spacing: 12) {
                         Button(action: { communicator.sendCommand("[MD]") }) {
                             VStack(spacing: 4) {
@@ -176,48 +204,35 @@ struct DrillScreen: View {
 
                         Button(action: isRunning ? stopDrill : startDrill) {
                             HStack {
-                                Image(systemName: isRunning ? "timer" : "play.fill")
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(isRunning ? "DETENER" : "INICIAR SECUENCIA")
-                                        .font(.system(size: 14, weight: .black, design: .monospaced))
-                                    if isRunning {
-                                        Text("PRÓXIMO EN \(countdownValue)s")
-                                            .font(.system(size: 10, weight: .bold))
-                                    }
-                                }
+                                Image(systemName: isRunning ? "stop.fill" : "play.fill")
+                                Text(isRunning ? "DETENER" : "INICIAR SECUENCIA")
+                                    .font(.system(size: 14, weight: .black, design: .monospaced))
                             }
-                            .frame(maxWidth: .infinity, minHeight: 55)
+                            .frame(maxWidth: .infinity, minHeight: 60)
                             .background(isRunning ? Color.red : Color.dragonBotPrimary)
                             .foregroundColor(.black)
                             .cornerRadius(12)
                             .shadow(color: isRunning ? .red.opacity(0.3) : .dragonBotPrimary.opacity(0.3), radius: 10)
                         }
                     }
+                }
+                .padding()
 
-                    VStack(spacing: 5) {
-                        HStack {
-                            Text("INTERVALO ENTRE TIROS:").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.gray)
-                            Spacer()
-                            Text("\(Int(intervalSeconds))s").font(.system(size: 14, weight: .black)).foregroundColor(.dragonBotPrimary)
-                        }
-                        Slider(value: $intervalSeconds, in: 1...10, step: 1).accentColor(.dragonBotPrimary).disabled(isRunning)
-                    }
-                    .padding(12).background(Color.white.opacity(0.05)).cornerRadius(10)
-                }.padding()
-
-                // Lista de Tiros
+                // MARK: - Lista de Tiros con Bucle Visual
                 ScrollView {
                     ZStack(alignment: .topLeading) {
+                        // Capa del Bucle (Path)
                         if sortedShotList.count > 1 {
-                            DataLineView(count: sortedShotList.count, phase: flowPhase, isActive: isRunning)
-                                .padding(.top, 45)
+                            LoopPath(count: sortedShotList.count)
+                                .stroke(isRunning ? Color.dragonBotPrimary : Color.white.opacity(0.2),
+                                        style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                                .frame(width: 60)
+                                .offset(y: 0)
                         }
                         
-                        VStack(spacing: 30) {
+                        VStack(spacing: 30) { // Spacing fijo para que el Path coincida
                             ForEach(sortedShotList, id: \.shotNumber) { cfg in
-                                let isCurrent = isRunning && (currentShotIndex > 0 && sortedShotList[safe: currentShotIndex-1]?.shotNumber == cfg.shotNumber)
-                                
-                                DrillShotCard(cfg: cfg, isCurrent: isCurrent, onEdit: {
+                                DrillShotCard(cfg: cfg, isCurrent: isRunning && cfg.shotNumber == 1, onEdit: {
                                     onConfigShot(cfg.shotNumber)
                                 }, onDelete: {
                                     communicator.sendCommand("[X]")
@@ -233,11 +248,11 @@ struct DrillScreen: View {
                             }
                             .foregroundColor(.dragonBotPrimary).padding(.horizontal).padding(.bottom, 100).disabled(isRunning)
                         }
-                    }.padding(.vertical)
+                    }
+                    .padding(.vertical)
                 }
             }
             
-            // Popup de Instrucciones
             if showInstructions {
                 instructionsPopup
             }
@@ -247,7 +262,6 @@ struct DrillScreen: View {
     }
     
     // MARK: - Popup de Instrucciones
-    
     private var instructionsPopup: some View {
         ZStack {
             Color.black.opacity(0.85).ignoresSafeArea()
@@ -264,13 +278,9 @@ struct DrillScreen: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 18) {
-                    instructionItem(icon: "plus.square.dashed", title: "CREAR SECUENCIA", desc: "Añade múltiples tiros. Cada uno puede tener una dirección y velocidad diferente, son ilimitados. Además puedes editarlos las veces que quieras, pon a prueba tus habilidades.")
-                    
-                    instructionItem(icon: "arrow.3.trianglepath", title: "REPETICIÓN", desc: "Define cuántas veces quieres que se repita la lista completa de tiros o activa el modo infinito.")
-                    
-                    instructionItem(icon: "clock.fill", title: "TIEMPO DE REACCIÓN", desc: "El 'Intervalo' ajusta los segundos de descanso entre cada tiro de la secuencia.")
-                    
-                    instructionItem(icon: "play.fill", title: "Iniciar Secuencia", desc: "Iniciar Secuencia solo funcionará si activaste primero modo con el botón de Modo Drill")
+                    instructionItem(icon: "plus.square.dashed", title: "CREAR SECUENCIA", desc: "Añade múltiples tiros con dirección y velocidad personalizada.")
+                    instructionItem(icon: "arrow.3.trianglepath", title: "REPETICIÓN", desc: "Define cuántas veces quieres que se repita la lista o activa el modo infinito.")
+                    instructionItem(icon: "play.fill", title: "INICIAR", desc: "Al iniciar, se enviarán todos los datos de los tiros configurados automáticamente.")
                 }
                 .padding(.vertical, 10)
                 
@@ -304,38 +314,23 @@ struct DrillScreen: View {
         }
     }
 }
-// MARK: - Componentes Visuales
 
-struct DataLineView: View {
-    let count: Int
-    let phase: CGFloat
-    let isActive: Bool
-    var body: some View {
-        Rectangle().fill(Color.dragonBotPrimary.opacity(0.3)).frame(width: 2)
-            .overlay(GeometryReader { geo in
-                VStack(spacing: 0) {
-                    ForEach(0..<count, id: \.self) { _ in
-                        Circle().fill(isActive ? Color.white : Color.dragonBotPrimary)
-                            .frame(width: 6, height: 6).shadow(color: .dragonBotPrimary, radius: 4)
-                            .offset(y: phase * 120)
-                    }
-                }.mask(Rectangle().frame(height: geo.size.height))
-            })
-            .frame(width: 2).padding(.leading, 41).allowsHitTesting(false)
-    }
-}
+// MARK: - Componentes Visuales
 
 struct DrillShotCard: View {
     let cfg: ShotConfig
     var isCurrent: Bool
     var onEdit: () -> Void
     var onDelete: () -> Void
+    
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
+                // El círculo ahora queda por encima del Path gracias al ZStack de la lista
                 Circle().fill(isCurrent ? Color.white : Color.dragonBotPrimary).frame(width: 34, height: 34)
                 Text("\(cfg.shotNumber)").font(.system(size: 16, weight: .black, design: .monospaced)).foregroundColor(.black)
             }.frame(width: 44)
+            
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("CONFIGURACIÓN TIRO \(cfg.shotNumber)").font(.system(size: 10, weight: .bold)).foregroundColor(isCurrent ? .white : .gray)

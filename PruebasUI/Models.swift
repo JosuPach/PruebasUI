@@ -38,6 +38,7 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
 
     @Published var speedAB: Int
     @Published var delayE: Int
+    @Published var spinBias: Int
     @Published var targetD: Int
     @Published var targetC: Int
     @Published var targetF: Double
@@ -51,6 +52,7 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         id: UUID = UUID(),
         shotNumber: Int,
         speedAB: Int = 127,
+        spinBias: Int = 127,
         delayE: Int = 500,
         targetD: Int = 127,
         targetC: Int = 127,
@@ -71,6 +73,7 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         self.targetH = targetH
         self.shots = shots
         self.interval = interval
+        self.spinBias = spinBias
     }
 
     var commandString: String {
