@@ -12,8 +12,8 @@ struct ShotConfigScreen: View {
     let dValues: [Int] = [0, 127, 255]
     let cValues: [Int] = [0, 64, 127, 191, 255]
 
-    @State private var powerTemp: Double
-    @State private var spinTemp: Double
+    @State private var speedATemp: Double
+    @State private var speedBTemp: Double
     @State private var delayTemp: Double
     @State private var targetFTemp: Double
     @State private var targetGTemp: Double
@@ -22,15 +22,14 @@ struct ShotConfigScreen: View {
     @State private var selectedCol: Int
     @State private var pulseAnim: CGFloat = 1.0
 
-    init(shotConfig: ShotConfig, communicator: BLECommunicator, onSaveConfig: @escaping (ShotConfig) -> Void, onCancel: @escaping ( ) -> Void) {
+    init(shotConfig: ShotConfig, communicator: BLECommunicator, onSaveConfig: @escaping (ShotConfig) -> Void, onCancel: @escaping () -> Void) {
         self.shotConfig = shotConfig
         self.communicator = communicator
         self.onSaveConfig = onSaveConfig
         self.onCancel = onCancel
 
-        // Inicializamos con los valores actuales del objeto
-        _powerTemp = State(initialValue: Double(shotConfig.speedAB))
-        _spinTemp = State(initialValue: Double(shotConfig.spinBias))
+        _speedATemp = State(initialValue: Double(shotConfig.speedA))
+        _speedBTemp = State(initialValue: Double(shotConfig.speedB))
         _delayTemp = State(initialValue: Double(shotConfig.delayE))
         _targetFTemp = State(initialValue: shotConfig.targetF)
         _targetGTemp = State(initialValue: shotConfig.targetG)
@@ -42,7 +41,6 @@ struct ShotConfigScreen: View {
         _selectedCol = State(initialValue: col)
     }
 
-    // --- LÓGICA DE ESCALADO UNIFICADA ---
     private func scaleTo99(_ value: Double) -> Int {
         let clamped = max(0, min(255, value))
         return Int(((clamped * 99.0) / 255.0).rounded())
@@ -54,11 +52,8 @@ struct ShotConfigScreen: View {
     private func generateSHCommand() -> String {
         let ix = scaleTo99(Double(cValues[selectedCol]))
         let iy = scaleTo99(Double(dValues[selectedRow]))
-        
-        // Mixer de motores: Importante usar el mismo escalado que en DrillScreen
-        let vA = scaleTo99(powerTemp + spinTemp)
-        let vB = scaleTo99(powerTemp - spinTemp)
-        
+        let vA = scaleTo99(speedATemp)
+        let vB = scaleTo99(speedBTemp)
         let ifeed = scaleTo99(delayTemp)
         let icx = scaleTo20(targetFTemp)
         let icy = scaleTo20(targetGTemp)
@@ -67,28 +62,21 @@ struct ShotConfigScreen: View {
         return "[SH\(ix),\(iy),\(vA),\(vB),\(ifeed),\(icx),\(icy),\(ict)]"
     }
 
+    // CORRECCIÓN: Ahora detecta cambios en TODOS los parámetros
     private var isModified: Bool {
-        Int(powerTemp.rounded()) != shotConfig.speedAB ||
-        Int(spinTemp.rounded()) != shotConfig.spinBias ||
-        Int(delayTemp.rounded()) != shotConfig.delayE || // Añadido para detectar cambios en delay
+        Int(speedATemp.rounded()) != shotConfig.speedA ||
+        Int(speedBTemp.rounded()) != shotConfig.speedB ||
+        Int(delayTemp.rounded()) != shotConfig.delayE ||
+        targetFTemp.rounded() != shotConfig.targetF ||
+        targetGTemp.rounded() != shotConfig.targetG ||
+        targetHTemp.rounded() != shotConfig.targetH ||
         selectedRow != (dValues.firstIndex(of: shotConfig.targetD) ?? 1) ||
         selectedCol != (cValues.firstIndex(of: shotConfig.targetC) ?? 2)
     }
 
     private func saveAndSend() {
-        let command = generateSHCommand()
-        print("""
-        ---------------------------------
-        💾 GUARDANDO CONFIGURACIÓN:
-        Valores Brutos -> P:\(powerTemp), S:\(spinTemp), D:\(delayTemp)
-        Comando Final  -> \(command)
-        ---------------------------------
-        """)
-        
-        // PERSISTENCIA: Guardamos los valores en base 0-255
-        // para que getSHString en DrillScreen haga el mapeo final correctamente.
-        shotConfig.speedAB = Int(powerTemp.rounded())
-        shotConfig.spinBias = Int(spinTemp.rounded())
+        shotConfig.speedA = Int(speedATemp.rounded())
+        shotConfig.speedB = Int(speedBTemp.rounded())
         shotConfig.delayE = Int(delayTemp.rounded())
         shotConfig.targetF = targetFTemp.rounded()
         shotConfig.targetG = targetGTemp.rounded()
@@ -108,16 +96,16 @@ struct ShotConfigScreen: View {
                 headerView
                 
                 courtVisualization
-                    .frame(height: 220)
+                    .frame(height: 240) // Aumentado ligeramente para acomodar la red
+                    .zIndex(10)
                 
                 VStack(spacing: 10) {
                     HStack(spacing: 10) {
-                        ModernParameterSlider(label: "POTENCIA", value: $powerTemp, range: 0...255, icon: "bolt.fill", displayValue: "\(scaleTo99(powerTemp))")
-                        ModernParameterSlider(label: "SPIN BALL", value: $spinTemp, range: -127...127, icon: "rotate.3d", displayValue: spinTemp > 0 ? "TOP" : (spinTemp < 0 ? "BACK" : "0"))
+                        ModernParameterSlider(label: "RUEDA A (SUP)", value: $speedATemp, range: 0...255, icon: "circle.and.line.horizontal", displayValue: "\(scaleTo99(speedATemp))")
+                        ModernParameterSlider(label: "RUEDA B (INF)", value: $speedBTemp, range: 0...255, icon: "circle.and.line.horizontal", displayValue: "\(scaleTo99(speedBTemp))")
                     }
                     
                     HStack(spacing: 10) {
-                        // Cambiado displayValue para mostrar 0-99 y ser consistente
                         ModernParameterSlider(label: "CADENCIA", value: $delayTemp, range: 0...255, icon: "speedometer", displayValue: "\(scaleTo99(delayTemp))")
                         ModernParameterSlider(label: "GIRO CT", value: $targetHTemp, range: 0...255, icon: "move.3d", displayValue: "\(scaleToCT(targetHTemp))")
                     }
@@ -131,8 +119,7 @@ struct ShotConfigScreen: View {
                 
                 Spacer()
                 
-                // Texto de depuración en tiempo real
-                Text("PROTOTIPO: \(generateSHCommand())")
+                Text("COMANDO: \(generateSHCommand())")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundColor(.cyan.opacity(0.5))
                 
@@ -143,11 +130,12 @@ struct ShotConfigScreen: View {
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { pulseAnim = 1.3 }
         }
     }
+
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading) {
                 Text("DRAGONBOT OS").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.cyan)
-                Text("MIXER MANUAL").font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(.white)
+                Text("CONFIGURACIÓN DE TIRO").font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(.white)
             }
             Spacer()
             Image(systemName: "cpu").foregroundColor(.cyan)
@@ -158,58 +146,71 @@ struct ShotConfigScreen: View {
         ZStack {
             RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(0.4))
             
-            ZStack(alignment: .bottom) {
-                TennisCourtShape()
-                    .fill(LinearGradient(colors: [Color.cyan.opacity(0.2), Color.clear], startPoint: .bottom, endPoint: .top))
-                    .overlay(TennisCourtLines().stroke(Color.white.opacity(0.15), lineWidth: 1))
-                    .frame(width: 280, height: 160)
-                    .rotation3DEffect(.degrees(-20), axis: (x: 1, y: 0, z: 0))
+            VStack(spacing: 0) {
+                ZStack {
+                    TennisCourtShape()
+                        .fill(LinearGradient(colors: [Color.cyan.opacity(0.2), Color.clear], startPoint: .bottom, endPoint: .top))
+                        .overlay(TennisCourtLines().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                        .frame(width: 280, height: 160)
 
-                VStack(spacing: 18) {
-                    ForEach((0...2).reversed(), id: \.self) { row in
-                        HStack(spacing: 28) {
-                            ForEach(0..<cValues.count, id: \.self) { col in
-                                let isSelected = selectedRow == row && selectedCol == col
-                                
-                                ZStack {
-                                    if isSelected {
-                                        Circle()
-                                            .stroke(Color.cyan, lineWidth: 2)
-                                            .frame(width: 38, height: 38)
-                                            .scaleEffect(pulseAnim)
-                                            .opacity(1.3 - pulseAnim)
-                                    }
+                    // CUADRÍCULA DE SELECCIÓN
+                    VStack(spacing: 20) {
+                        ForEach((0...2).reversed(), id: \.self) { row in
+                            HStack(spacing: 30) {
+                                ForEach(0..<cValues.count, id: \.self) { col in
+                                    let isSelected = selectedRow == row && selectedCol == col
                                     
-                                    // Esferas grandes
-                                    Circle()
-                                        .fill(isSelected ? Color(red: 0.82, green: 0.98, blue: 0.0) : Color.white.opacity(0.1))
-                                        .frame(width: 26, height: 26)
-                                        .overlay(
-                                            Image(systemName: "tennisball.fill")
-                                                .resizable().padding(5)
-                                                .foregroundColor(isSelected ? .black.opacity(0.6) : .clear)
-                                        )
-                                        .shadow(color: isSelected ? .cyan.opacity(0.4) : .clear, radius: 8)
-                                }
-                                .onTapGesture {
-                                    UISelectionFeedbackGenerator().selectionChanged()
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        selectedRow = row; selectedCol = col
+                                    Button(action: {
+                                        UISelectionFeedbackGenerator().selectionChanged()
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            selectedRow = row
+                                            selectedCol = col
+                                        }
+                                    }) {
+                                        ZStack {
+                                            if isSelected {
+                                                Circle()
+                                                    .stroke(Color.cyan, lineWidth: 2)
+                                                    .frame(width: 35, height: 35)
+                                                    .scaleEffect(pulseAnim)
+                                                    .opacity(1.3 - pulseAnim)
+                                            }
+                                            
+                                            Circle()
+                                                .fill(isSelected ? Color(red: 0.82, green: 0.98, blue: 0.0) : Color.white.opacity(0.15))
+                                                .frame(width: 24, height: 24)
+                                                .overlay(
+                                                    Image(systemName: "tennisball.fill")
+                                                        .resizable().padding(5)
+                                                        .foregroundColor(isSelected ? .black : .clear)
+                                                )
+                                        }
                                     }
+                                    .buttonStyle(PlainButtonStyle())
                                 }
                             }
                         }
                     }
+                    .offset(y: -5)
                 }
-                .rotation3DEffect(.degrees(-20), axis: (x: 1, y: 0, z: 0))
-                .offset(y: -20)
+                .rotation3DEffect(.degrees(-15), axis: (x: 1, y: 0, z: 0))
+                
+                // RED AGREGADA DEBAJO
+                TennisNetView()
+                    .scaleEffect(0.8)
+                    .offset(y: -20) // Ajuste para que parezca estar al final de la cancha
             }
-        }.padding(.horizontal)
+        }
+        .padding(.horizontal)
     }
 
     private var actionButtons: some View {
         HStack(spacing: 12) {
-            Button(action: { dismiss() }) {
+            // CORRECCIÓN: Ahora llama a onCancel y dismiss
+            Button(action: {
+                onCancel()
+                dismiss()
+            }) {
                 Text("CANCELAR").font(.system(size: 12, weight: .bold, design: .monospaced))
                     .frame(maxWidth: .infinity).padding(.vertical, 15)
                     .background(Color.white.opacity(0.05)).foregroundColor(.white).cornerRadius(10)

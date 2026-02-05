@@ -131,7 +131,7 @@ struct MainContentScreen: View {
     let helpData: [String: HelpContent] = [
         "MANUAL": HelpContent(title: "MODO MANUAL", description: "CONTROLE SU DRAGONBOT AJUSTANDOLO MANUALMENTE CON LAS PERILLAS TRASERAS.", icon: "hand.tap.fill", color: .dragonBotPrimary),
         "IA": HelpContent(title: "MODO IA", description: "CONTROL POR VISIÓN ARTIFICIAL, LA DRAGONBOT DETECTA AL JUGADOR AUTOMATICAMENTE.", icon: "bolt.shield.fill", color: .dragonBotSecondary),
-        "SLIDERS": HelpContent(title: "SLIDERS", description: "AJUSTE LA VELOCIDAD DESDE SU TELÉFONO REMOTAMENTE.", icon: "slider.horizontal.3", color: .dragonBotPrimary),
+        "REMOTO": HelpContent(title: "REMOTO", description: "AJUSTE LA VELOCIDAD DESDE SU TELÉFONO REMOTAMENTE.", icon: "slider.horizontal.3", color: .dragonBotPrimary), // Cambiado de SLIDERS a REMOTO
         "JOYSTICK": HelpContent(title: "CONTROL CARTRACK", description: "CONTROL MANUAL DEL MOVIMIENTO DEL CARRITO.", icon: "gamecontroller.fill", color: .dragonBotSecondary),
         "DRILLS": HelpContent(title: "SECUENCIAS DE TIRO", description: "EDITE Y PROGRAME UNA SERIE DE TIROS CONSECUTIVOS.", icon: "scope", color: .dragonBotPrimary),
         "SWAP": HelpContent(title: "SECUENCIA ÚNICA", description: "CONFIGURACIÓN DE TIRO RÁPIDO CON INTERCAMBIO DE PARÁMETROS.", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
@@ -190,7 +190,7 @@ struct MainContentScreen: View {
                                 }
                             }
                             CompactModeButton(label: "REMOTO", icon: "slider.horizontal.3", color: .dragonBotPrimary) {
-                                checkHelp(key: "REMOTO", wasSeen: hasSeenSliders) {
+                                checkHelp(key: "REMOTO", wasSeen: hasSeenSliders) { // Ahora coincide con la llave del diccionario
                                     hasSeenSliders = true
                                     currentConfigMode = .MANUAL
                                     showConfigDialog = true
@@ -215,7 +215,7 @@ struct MainContentScreen: View {
                     ControlSection(title: "PROGRAMAS TÁCTICOS") {
                         VStack(spacing: 12) {
                             Button(action: {
-                                checkHelp(key: "SECUENCIAS PERSONALIZADAS", wasSeen: hasSeenDrills) {
+                                checkHelp(key: "DRILLS", wasSeen: hasSeenDrills) { // Cambiado de la frase larga a "DRILLS"
                                     hasSeenDrills = true
                                     navigateToDrills = true
                                 }
@@ -227,7 +227,7 @@ struct MainContentScreen: View {
                             )
 
                             Button(action: {
-                                checkHelp(key: "SECUENCIAS REPETIBLES", wasSeen: hasSeenSwap) {
+                                checkHelp(key: "SWAP", wasSeen: hasSeenSwap) { // Cambiado de la frase larga a "SWAP"
                                     hasSeenSwap = true
                                     navigateToSwap = true
                                 }

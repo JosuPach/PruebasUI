@@ -24,8 +24,6 @@ enum DragonBotMode: String {
     case MANUAL
     case AUTO
 }
-
-
 // MARK: - ShotConfig (CLASE OBSERVADA + Codable)
 
 class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
@@ -36,9 +34,15 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
     var id: UUID
     let shotNumber: Int
 
+    // Propiedades de velocidad independientes
+    @Published var speedA: Int
+    @Published var speedB: Int
+    
+    // Propiedades mantenidas por compatibilidad o lógica secundaria
     @Published var speedAB: Int
-    @Published var delayE: Int
     @Published var spinBias: Int
+    
+    @Published var delayE: Int
     @Published var targetD: Int
     @Published var targetC: Int
     @Published var targetF: Double
@@ -51,9 +55,11 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
     init(
         id: UUID = UUID(),
         shotNumber: Int,
+        speedA: Int = 127,
+        speedB: Int = 127,
         speedAB: Int = 127,
-        spinBias: Int = 127,
-        delayE: Int = 500,
+        spinBias: Int = 0,
+        delayE: Int = 127,
         targetD: Int = 127,
         targetC: Int = 127,
         targetF: Double = 127,
@@ -64,7 +70,10 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
     ) {
         self.id = id
         self.shotNumber = shotNumber
+        self.speedA = speedA
+        self.speedB = speedB
         self.speedAB = speedAB
+        self.spinBias = spinBias
         self.delayE = delayE
         self.targetD = targetD
         self.targetC = targetC
@@ -73,22 +82,6 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         self.targetH = targetH
         self.shots = shots
         self.interval = interval
-        self.spinBias = spinBias
-    }
-
-    var commandString: String {
-        let cmd = "S\(String(format: "%03d", shots))" +
-                  "I\(String(format: "%04d", interval))" +
-                  "A\(String(format: "%03d", speedAB))" +
-                  "B\(String(format: "%03d", speedAB))" +
-                  "C\(String(format: "%03d", targetC))" +
-                  "D\(String(format: "%03d", targetD))" +
-                  "F\(String(format: "%03d", Int(targetF)))" +
-                  "G\(String(format: "%03d", Int(targetG)))" +
-                  "H\(String(format: "%03d", Int(targetH)))" +
-                  "E\(String(format: "%04d", delayE))"
-
-        return "[SHOT] \(shotNumber) \(cmd)"
     }
 
     // MARK: - Lógica de Escalado Corregida
@@ -98,7 +91,6 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         return Int(round(Double(v) * 99.0 / 255.0))
     }
     
-    // Cambiado a Double para aceptar targetF y targetG
     private func scaledTo20(_ value: Double) -> Int {
         let v = max(0, min(255, value))
         return Int(round(v * 20.0 / 255.0))
@@ -110,36 +102,28 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         return Int(scaled.rounded())
     }
 
+    // Genera el comando corto para el protocolo SH
     func shortShotCommand() -> String {
         let x = scaledTo99(self.targetC)
         let y = scaledTo99(self.targetD)
-        let v1 = scaledTo99(self.speedAB)
-        let v2 = scaledTo99(self.speedAB)
+        let v1 = scaledTo99(self.speedA)  // Rueda A
+        let v2 = scaledTo99(self.speedB)  // Rueda B
         let v3 = scaledTo99(self.delayE)
         let v4 = scaledTo20(self.targetF)
         let v5 = scaledTo20(self.targetG)
         let v6 = scaleToH(self.targetH)
         
-        // v6 (H) puede ser negativo y de 4 dígitos, se usa %d para evitar errores de truncado
-        return String(format: "[SH%02d%02d%02d%02d%02d%02d%02d%d]", x, y, v1, v2, v3, v4, v5, v6)
-    }
-
-    func applyShortValues(x: Int, y: Int, v1: Int, v2: Int) {
-        self.targetC = Int(round(Double(x) * 255.0 / 99.0))
-        self.targetD = Int(round(Double(y) * 255.0 / 99.0))
-        self.speedAB = Int(round(Double((v1 + v2) / 2) * 255.0 / 99.0))
-    }
-    
-    func applyShortValues2(x: Int, y: Int) {
-        self.targetF = Double(x) * 255.0 / 20.0
-        self.targetG = Double(y) * 255.0 / 20.0
+        return String(format: "[SH%02d,%02d,%02d,%02d,%02d,%02d,%02d,%d]", x, y, v1, v2, v3, v4, v5, v6)
     }
 
     func clone() -> ShotConfig {
         return ShotConfig(
             id: UUID(),
             shotNumber: self.shotNumber,
+            speedA: self.speedA,
+            speedB: self.speedB,
             speedAB: self.speedAB,
+            spinBias: self.spinBias,
             delayE: self.delayE,
             targetD: self.targetD,
             targetC: self.targetC,
@@ -151,25 +135,31 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         )
     }
 
+    // MARK: - Codable Implementation
+
     enum CodingKeys: String, CodingKey {
-        case id, shotNumber, speedAB, delayE, targetD, targetC, targetF, targetG, targetH, shots, interval, isRunning
+        case id, shotNumber, speedA, speedB, speedAB, spinBias, delayE, targetD, targetC, targetF, targetG, targetH, shots, interval, isRunning
     }
 
     required convenience init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        
         let idString = try container.decode(String.self, forKey: .id)
         let id = UUID(uuidString: idString) ?? UUID()
         let shotNumber = try container.decode(Int.self, forKey: .shotNumber)
+        
+        // Decodificamos A y B, con valores por defecto si no existen en archivos viejos
+        let speedA = try container.decodeIfPresent(Int.self, forKey: .speedA) ?? 127
+        let speedB = try container.decodeIfPresent(Int.self, forKey: .speedB) ?? 127
+        
         let speedAB = try container.decode(Int.self, forKey: .speedAB)
+        let spinBias = try container.decodeIfPresent(Int.self, forKey: .spinBias) ?? 0
         let delayE = try container.decode(Int.self, forKey: .delayE)
         let targetD = try container.decode(Int.self, forKey: .targetD)
         let targetC = try container.decode(Int.self, forKey: .targetC)
-        
-        // Corregido: Decodificar como Double para evitar fallos de tipo
         let targetF = try container.decode(Double.self, forKey: .targetF)
         let targetG = try container.decode(Double.self, forKey: .targetG)
         let targetH = try container.decode(Double.self, forKey: .targetH)
-        
         let shots = try container.decode(Int.self, forKey: .shots)
         let interval = try container.decode(Int.self, forKey: .interval)
         let isRunning = try container.decodeIfPresent(Bool.self, forKey: .isRunning) ?? false
@@ -177,7 +167,10 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         self.init(
             id: id,
             shotNumber: shotNumber,
+            speedA: speedA,
+            speedB: speedB,
             speedAB: speedAB,
+            spinBias: spinBias,
             delayE: delayE,
             targetD: targetD,
             targetC: targetC,
@@ -194,7 +187,10 @@ class ShotConfig: ObservableObject, Identifiable, Equatable, Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(self.id.uuidString, forKey: .id)
         try container.encode(self.shotNumber, forKey: .shotNumber)
+        try container.encode(self.speedA, forKey: .speedA)
+        try container.encode(self.speedB, forKey: .speedB)
         try container.encode(self.speedAB, forKey: .speedAB)
+        try container.encode(self.spinBias, forKey: .spinBias)
         try container.encode(self.delayE, forKey: .delayE)
         try container.encode(self.targetD, forKey: .targetD)
         try container.encode(self.targetC, forKey: .targetC)

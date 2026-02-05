@@ -96,7 +96,13 @@ struct DrillShotCard: View {
                         Spacer()
                         if !isCurrent { Button(action: onDelete) { Image(systemName: "trash").font(.system(size: 12)).foregroundColor(.red.opacity(0.7)) } }
                     }
-                    Text("\(cfg.speedAB) km/h").font(.system(size: 14, weight: .bold)).foregroundColor(.white)
+                    
+                    // Actualizado para mostrar velocidades A y B independientes
+                    HStack(spacing: 10) {
+                        Text("A: \(cfg.speedA)").font(.system(size: 13, weight: .bold)).foregroundColor(.dragonBotSecondary)
+                        Text("B: \(cfg.speedB)").font(.system(size: 13, weight: .bold)).foregroundColor(.dragonBotPrimary)
+                    }
+                    
                     HStack(spacing: 4) {
                         Text("\(Int(cfg.targetH)) RPM").font(.system(size: 11)).foregroundColor(.white.opacity(0.7))
                         Text(cfg.targetH > 0 ? "TOP" : (cfg.targetH < 0 ? "BACK" : "FLAT")).font(.system(size: 7, weight: .black)).padding(.horizontal, 4).padding(.vertical, 1).background(cfg.targetH > 0 ? Color.green.opacity(0.3) : (cfg.targetH < 0 ? Color.red.opacity(0.3) : Color.gray.opacity(0.3))).cornerRadius(3).foregroundColor(.white)
@@ -128,21 +134,18 @@ struct DrillScreen: View {
     @State private var dashPhase: CGFloat = 0
     @State private var isDataLoaded: Bool = false
 
-    // MARK: - Lógica de Formateo SH (CORREGIDA)
+    // MARK: - Lógica de Formateo SH (CORREGIDA PARA A Y B)
     private func getSHString(for cfg: ShotConfig) -> String {
-        let speedBase = Double(cfg.speedAB)
-        let spinBias = Double(cfg.spinBias)
-        
-        // Motores Mixer
-        let vA = mapValue(speedBase + spinBias, from: 0...255, to: 0...99)
-        let vB = mapValue(speedBase - spinBias, from: 0...255, to: 0...99)
+        // Mapeo de Ruedas A y B directamente desde las nuevas variables
+        let vA = mapValue(Double(cfg.speedA), from: 0...255, to: 0...99)
+        let vB = mapValue(Double(cfg.speedB), from: 0...255, to: 0...99)
         
         // Coordenadas
-        let xS = mapValue(Double(cfg.targetD), from: 0...255, to: 0...99)
-        let yS = mapValue(Double(cfg.targetC), from: 0...255, to: 0...99)
+        let xS = mapValue(Double(cfg.targetC), from: 0...255, to: 0...99)
+        let yS = mapValue(Double(cfg.targetD), from: 0...255, to: 0...99)
         
-        // CORRECCIÓN: Feed ahora usa base 0...255 para que coincida con el editor
-        let fS = mapValue(Double(cfg.delayE), from: 0...255, to: 0...99)
+        // Feed / Delay (Escalado a 0-99)
+        let fS = mapValue(Double(cfg.delayE), from: 0...2000, to: 0...99)
         
         // Otros parámetros
         let cxS = mapValue(cfg.targetF, from: 0...255, to: 0...20)
@@ -154,9 +157,9 @@ struct DrillScreen: View {
         print("""
         ---------------------------------
         🚀 COMANDO GENERADO (MODO DRILL):
-        Original -> Speed: \(cfg.speedAB), Spin: \(cfg.spinBias), Delay: \(cfg.delayE)
-        Mapeado  -> vA: \(vA), vB: \(vB), X: \(xS), Y: \(yS), F: \(fS)
-        String   -> \(finalCommand)
+        Valores -> A: \(cfg.speedA), B: \(cfg.speedB), Delay: \(cfg.delayE)
+        Mapeado -> vA: \(vA), vB: \(vB), X: \(xS), Y: \(yS), F: \(fS)
+        String  -> \(finalCommand)
         ---------------------------------
         """)
         
