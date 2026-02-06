@@ -1,5 +1,18 @@
 import SwiftUI
 
+extension UINavigationController: UIGestureRecognizerDelegate {
+    override open func viewDidLoad() {
+        super.viewDidLoad()
+        // Esto vincula el gesto físico al delegado para que no se apague
+        interactivePopGestureRecognizer?.delegate = self
+    }
+
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Solo permite deslizar si hay una pantalla a la cual regresar
+        return viewControllers.count > 1
+    }
+}
+
 // MARK: - Mini Preview de la Cancha
 struct MiniCourtPreview: View {
     let targetC: Int
@@ -97,7 +110,6 @@ struct DrillShotCard: View {
                         if !isCurrent { Button(action: onDelete) { Image(systemName: "trash").font(.system(size: 12)).foregroundColor(.red.opacity(0.7)) } }
                     }
                     
-                    // Actualizado para mostrar velocidades A y B independientes
                     HStack(spacing: 10) {
                         Text("A: \(cfg.speedA)").font(.system(size: 13, weight: .bold)).foregroundColor(.dragonBotSecondary)
                         Text("B: \(cfg.speedB)").font(.system(size: 13, weight: .bold)).foregroundColor(.dragonBotPrimary)
@@ -134,36 +146,17 @@ struct DrillScreen: View {
     @State private var dashPhase: CGFloat = 0
     @State private var isDataLoaded: Bool = false
 
-    // MARK: - Lógica de Formateo SH (CORREGIDA PARA A Y B)
     private func getSHString(for cfg: ShotConfig) -> String {
-        // Mapeo de Ruedas A y B directamente desde las nuevas variables
         let vA = mapValue(Double(cfg.speedA), from: 0...255, to: 0...99)
         let vB = mapValue(Double(cfg.speedB), from: 0...255, to: 0...99)
-        
-        // Coordenadas
         let xS = mapValue(Double(cfg.targetC), from: 0...255, to: 0...99)
         let yS = mapValue(Double(cfg.targetD), from: 0...255, to: 0...99)
-        
-        // Feed / Delay (Escalado a 0-99)
         let fS = mapValue(Double(cfg.delayE), from: 0...2000, to: 0...99)
-        
-        // Otros parámetros
         let cxS = mapValue(cfg.targetF, from: 0...255, to: 0...20)
         let cyS = mapValue(cfg.targetG, from: 0...255, to: 0...20)
         let ctS = mapValue(cfg.targetH, from: 0...255, to: -3000...3000)
         
-        let finalCommand = "[SH\(xS),\(yS),\(vA),\(vB),\(fS),\(cxS),\(cyS),\(ctS)]"
-        
-        print("""
-        ---------------------------------
-        🚀 COMANDO GENERADO (MODO DRILL):
-        Valores -> A: \(cfg.speedA), B: \(cfg.speedB), Delay: \(cfg.delayE)
-        Mapeado -> vA: \(vA), vB: \(vB), X: \(xS), Y: \(yS), F: \(fS)
-        String  -> \(finalCommand)
-        ---------------------------------
-        """)
-        
-        return finalCommand
+        return "[SH\(xS),\(yS),\(vA),\(vB),\(fS),\(cxS),\(cyS),\(ctS)]"
     }
 
     private func mapValue(_ value: Double, from: ClosedRange<Double>, to: ClosedRange<Double>) -> Int {
@@ -179,17 +172,25 @@ struct DrillScreen: View {
             Color.dragonBotBackground.ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Header de Conexión
-                VStack(spacing: 4) {
-                    Text("ESTADO DE CONEXIÓN").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.white.opacity(0.4))
-                    HStack(spacing: 12) {
-                        Circle().fill(communicator.isConnected ? Color.green : Color.red).frame(width: 14, height: 14).shadow(color: communicator.isConnected ? .green : .red, radius: 4)
-                        Text(communicator.isConnected ? "DRAGONBOT CONECTADA" : "DESCONECTADO").font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(communicator.isConnected ? .green : .red)
+                // Indicador de Conexión
+                HStack {
+                    Circle()
+                        .fill(communicator.isConnected ? Color.green : Color.red)
+                        .frame(width: 8, height: 8)
+                    Text(communicator.isConnected ? "DRAGONBOT CONECTADA" : "DESCONECTADO")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(communicator.isConnected ? .green : .red)
+                    Spacer()
+                    Button(action: { showInstructions = true }) {
+                        Image(systemName: "questionmark.circle").foregroundColor(.white.opacity(0.6))
                     }
-                }.frame(maxWidth: .infinity).padding(.vertical, 20).background(Color.black.opacity(0.4))
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.3))
 
+                // Panel de Controles
                 VStack(spacing: 15) {
-                    // Controles Superiores
                     HStack(spacing: 12) {
                         Button(action: { communicator.sendCommand("[MD]") }) {
                             VStack(spacing: 4) { Image(systemName: "target"); Text("MODO DRILL").font(.system(size: 8, weight: .bold)) }
@@ -214,7 +215,6 @@ struct DrillScreen: View {
                         }
                     }
 
-                    // Botones de Acción
                     VStack(spacing: 12) {
                         HStack(spacing: 10) {
                             Button(action: {
@@ -246,18 +246,17 @@ struct DrillScreen: View {
                         }) {
                             HStack {
                                 Image(systemName: isRunning ? "stop.fill" : "play.fill")
-                                Text(isRunning ? "DETENER" : (isDataLoaded ? "INICIAR SECUENCIA" : "CARGUE DATOS PRIMERO")).font(.system(size: 16, weight: .black, design: .monospaced))
+                                Text(isRunning ? "DETENER" : (isDataLoaded ? "INICIAR SECUENCIA" : "CARGUE DATOS")).font(.system(size: 16, weight: .black, design: .monospaced))
                             }
                             .frame(maxWidth: .infinity, minHeight: 65)
                             .background(isRunning ? Color.red : (isDataLoaded ? Color.dragonBotPrimary : Color.gray.opacity(0.3)))
                             .foregroundColor(isDataLoaded || isRunning ? .black : .white.opacity(0.5)).cornerRadius(12)
-                            .shadow(color: isRunning ? .red.opacity(0.4) : (isDataLoaded ? .dragonBotPrimary.opacity(0.4) : .clear), radius: 10)
                         }
                         .disabled(!isDataLoaded && !isRunning)
                     }
                 }.padding(.horizontal).padding(.top, 15)
 
-                // Lista de Tiros Scrollable
+                // Lista de Tiros
                 ScrollView(showsIndicators: false) {
                     ZStack(alignment: .topLeading) {
                         if sortedShotList.count > 1 {
@@ -274,11 +273,13 @@ struct DrillScreen: View {
                                     onDeleteShot(cfg.shotNumber)
                                     isDataLoaded = false
                                 })
+                                
                                 if index < sortedShotList.count - 1 {
                                     HStack(spacing: 6) {
                                         Image(systemName: "clock.arrow.2.circlepath")
                                         Text("ESPERA: \(String(format: "%.1f", Double(cfg.delayE) / 1000.0))s").font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    }.foregroundColor(isRunning ? .dragonBotPrimary : .white.opacity(0.4)).padding(.leading, 70).frame(height: 30)
+                                    }
+                                    .foregroundColor(isRunning ? .dragonBotPrimary : .white.opacity(0.4)).padding(.leading, 70).frame(height: 30)
                                 } else { Spacer().frame(height: 30) }
                             }
                             
@@ -290,12 +291,18 @@ struct DrillScreen: View {
                                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                                     .padding().frame(maxWidth: .infinity)
                                     .background(RoundedRectangle(cornerRadius: 15).stroke(Color.dragonBotPrimary, lineWidth: 1))
-                            }.foregroundColor(.dragonBotPrimary).padding(.horizontal).padding(.bottom, 100)
+                            }
+                            .foregroundColor(.dragonBotPrimary).padding(.horizontal).padding(.bottom, 100)
                         }
                     }.padding(.vertical)
                 }
             }
             if showInstructions { InstructionsView(isPresented: $showInstructions) }
+        } // Cierre del ZStack principal
+                .navigationTitle("SECUENCIAS")
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarBackButtonHidden(true) // Escondemos el botón para que sea por gesto
+                .toolbarBackground(.visible, for: .navigationBar) // Forzamos que el contenedor de la barra exista
+                .toolbarBackground(Color.dragonBotBackground, for: .navigationBar) // Le damos tu color
+            }
         }
-    }
-}

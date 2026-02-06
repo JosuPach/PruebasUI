@@ -99,7 +99,7 @@ struct NavButtonContent: View {
     }
 }
 
-// MARK: - MAIN CONTENT SCREEN (SIN SCROLL / FONDO NEGRO)
+// MARK: - MAIN CONTENT SCREEN (LIMPIA Y SIN CAPAS EXTRA)
 struct MainContentScreen: View {
     @ObservedObject var communicator: BLECommunicator
     @Binding var shotsMap: [Int : ShotConfig]
@@ -123,15 +123,13 @@ struct MainContentScreen: View {
     @State private var showJoystickDialog = false
     @State private var currentConfigMode: DragonBotMode = .NONE
     @State private var gridPhase: CGFloat = 0
-    @State private var navigateToDrills = false
-    @State private var navigateToSwap = false
     @State private var activeHelp: HelpContent? = nil
     @State private var pendingAction: (() -> Void)? = nil
 
     let helpData: [String: HelpContent] = [
         "MANUAL": HelpContent(title: "MODO MANUAL", description: "CONTROLE SU DRAGONBOT AJUSTANDOLO MANUALMENTE CON LAS PERILLAS TRASERAS.", icon: "hand.tap.fill", color: .dragonBotPrimary),
         "IA": HelpContent(title: "MODO IA", description: "CONTROL POR VISIÓN ARTIFICIAL, LA DRAGONBOT DETECTA AL JUGADOR AUTOMATICAMENTE.", icon: "bolt.shield.fill", color: .dragonBotSecondary),
-        "REMOTO": HelpContent(title: "REMOTO", description: "AJUSTE LA VELOCIDAD DESDE SU TELÉFONO REMOTAMENTE.", icon: "slider.horizontal.3", color: .dragonBotPrimary), // Cambiado de SLIDERS a REMOTO
+        "REMOTO": HelpContent(title: "REMOTO", description: "AJUSTE LA VELOCIDAD DESDE SU TELÉFONO REMOTAMENTE.", icon: "slider.horizontal.3", color: .dragonBotPrimary),
         "JOYSTICK": HelpContent(title: "CONTROL CARTRACK", description: "CONTROL MANUAL DEL MOVIMIENTO DEL CARRITO.", icon: "gamecontroller.fill", color: .dragonBotSecondary),
         "DRILLS": HelpContent(title: "SECUENCIAS DE TIRO", description: "EDITE Y PROGRAME UNA SERIE DE TIROS CONSECUTIVOS.", icon: "scope", color: .dragonBotPrimary),
         "SWAP": HelpContent(title: "SECUENCIA ÚNICA", description: "CONFIGURACIÓN DE TIRO RÁPIDO CON INTERCAMBIO DE PARÁMETROS.", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
@@ -146,12 +144,16 @@ struct MainContentScreen: View {
         self.onConfigShot = onConfigShot
         self.onAddShot = onAddShot
         self.onDeleteShot = onDeleteShot
+        // Quitamos cualquier rastro de estilo de tabla por si acaso
         UITableView.appearance().backgroundColor = .clear
     }
     
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea() // Fondo negro solicitado
+            // Capa 1: Fondo Base
+            Color.black.ignoresSafeArea()
+            
+            // Capa 2: Efectos Visuales
             StarFieldView()
             InfinitePerspectiveGrid(phase: gridPhase)
                 .stroke(LinearGradient(colors: [Color.dragonBotSecondary.opacity(0.3), .clear], startPoint: .bottom, endPoint: .top), lineWidth: 1.0)
@@ -159,95 +161,86 @@ struct MainContentScreen: View {
                     withAnimation(Animation.linear(duration: 5.0).repeatForever(autoreverses: false)) { gridPhase = 1.0 }
                 }
             
-            NavigationView {
-                VStack(spacing: 20) {
-                    // Header Compacto
-                    VStack(spacing: 5) {
-                        Text("DRAGONBOT")
-                            .font(.system(size: 32, weight: .black, design: .monospaced))
-                            .foregroundColor(.white).tracking(6)
-                        Text("TACTICAL INTERFACE V1.0")
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.4))
-                    }
-                    .padding(.top, 10)
-                    
-                    ConnectionWarningView(communicator: communicator, onConnectClick: { showDeviceSelectionDialog = true })
-                    
-                    // BLOQUE ÚNICO DE MODOS DE OPERACIÓN
-                    ControlSection(title: "MODOS DE OPERACIÓN") {
-                        HStack(spacing: 12) {
-                            CompactModeButton(label: "MANUAL", icon: "hand.tap.fill", color: .dragonBotPrimary) {
-                                checkHelp(key: "MANUAL", wasSeen: hasSeenManual) {
-                                    hasSeenManual = true
-                                    communicator.sendCommand("[L000]")
-                                }
+            // Capa 3: Contenido Principal (Ya no usa NavigationView)
+            VStack(spacing: 20) {
+                // Header Compacto
+                VStack(spacing: 5) {
+                    Text("DRAGONBOT")
+                        .font(.system(size: 32, weight: .black, design: .monospaced))
+                        .foregroundColor(.white).tracking(6)
+                    Text("TACTICAL INTERFACE V1.0")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .padding(.top, 10)
+                
+                ConnectionWarningView(communicator: communicator, onConnectClick: { showDeviceSelectionDialog = true })
+                
+                // MODOS DE OPERACIÓN
+                ControlSection(title: "MODOS DE OPERACIÓN") {
+                    HStack(spacing: 12) {
+                        CompactModeButton(label: "MANUAL", icon: "hand.tap.fill", color: .dragonBotPrimary) {
+                            checkHelp(key: "MANUAL", wasSeen: hasSeenManual) {
+                                hasSeenManual = true
+                                communicator.sendCommand("[L000]")
                             }
-                            CompactModeButton(label: "MODO IA", icon: "bolt.shield.fill", color: .dragonBotSecondary) {
-                                checkHelp(key: "IA", wasSeen: hasSeenIA) {
-                                    hasSeenIA = true
-                                    communicator.sendCommand("[F000]")
-                                }
+                        }
+                        CompactModeButton(label: "MODO IA", icon: "bolt.shield.fill", color: .dragonBotSecondary) {
+                            checkHelp(key: "IA", wasSeen: hasSeenIA) {
+                                hasSeenIA = true
+                                communicator.sendCommand("[F000]")
                             }
-                            CompactModeButton(label: "REMOTO", icon: "slider.horizontal.3", color: .dragonBotPrimary) {
-                                checkHelp(key: "REMOTO", wasSeen: hasSeenSliders) { // Ahora coincide con la llave del diccionario
-                                    hasSeenSliders = true
-                                    currentConfigMode = .MANUAL
-                                    showConfigDialog = true
-                                }
+                        }
+                        CompactModeButton(label: "REMOTO", icon: "slider.horizontal.3", color: .dragonBotPrimary) {
+                            checkHelp(key: "REMOTO", wasSeen: hasSeenSliders) {
+                                hasSeenSliders = true
+                                currentConfigMode = .MANUAL
+                                showConfigDialog = true
                             }
                         }
                     }
+                }
 
-                    // CONTROL CARTRACK
-                    ControlSection(title: "SISTEMA CARTRACK") {
+                // CONTROL CARTRACK
+                ControlSection(title: "SISTEMA CARTRACK") {
+                    Button(action: {
+                        checkHelp(key: "JOYSTICK", wasSeen: hasSeenJoystick) {
+                            hasSeenJoystick = true
+                            showJoystickDialog = true
+                        }
+                    }) {
+                        NavButtonContent(label: "CONTROL CARTRACK", icon: "gamecontroller.fill", color: .dragonBotSecondary)
+                    }
+                }
+                
+                // PROGRAMAS (Navegación manual via Callbacks)
+                ControlSection(title: "PROGRAMAS TÁCTICOS") {
+                    VStack(spacing: 12) {
                         Button(action: {
-                            checkHelp(key: "JOYSTICK", wasSeen: hasSeenJoystick) {
-                                hasSeenJoystick = true
-                                showJoystickDialog = true
+                            checkHelp(key: "DRILLS", wasSeen: hasSeenDrills) {
+                                hasSeenDrills = true
+                                onDrillsClick() // <--- Ejecuta la transición al editor
                             }
                         }) {
-                            NavButtonContent(label: "CONTROL CARTRACK", icon: "gamecontroller.fill", color: .dragonBotSecondary)
+                            NavButtonContent(label: "EDITOR DE SECUENCIAS", icon: "scope", color: .dragonBotPrimary)
                         }
-                    }
-                    
-                    // PROGRAMAS
-                    ControlSection(title: "PROGRAMAS TÁCTICOS") {
-                        VStack(spacing: 12) {
-                            Button(action: {
-                                checkHelp(key: "DRILLS", wasSeen: hasSeenDrills) { // Cambiado de la frase larga a "DRILLS"
-                                    hasSeenDrills = true
-                                    navigateToDrills = true
-                                }
-                            }) {
-                                NavButtonContent(label: "EDITOR DE SECUENCIAS", icon: "scope", color: .dragonBotPrimary)
-                            }
-                            .background(
-                                NavigationLink(destination: DrillScreen(communicator: communicator, shots: $shotsMap, onBackClick: onBackClick, onConfigShot: onConfigShot, onAddShot: onAddShot, onDeleteShot: onDeleteShot), isActive: $navigateToDrills) { EmptyView() }
-                            )
 
-                            Button(action: {
-                                checkHelp(key: "SWAP", wasSeen: hasSeenSwap) { // Cambiado de la frase larga a "SWAP"
-                                    hasSeenSwap = true
-                                    navigateToSwap = true
-                                }
-                            }) {
-                                NavButtonContent(label: "SECUENCIAS ÚNICAS", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
+                        Button(action: {
+                            checkHelp(key: "SWAP", wasSeen: hasSeenSwap) {
+                                hasSeenSwap = true
+                                onSwapClick() // <--- Ejecuta la transición a swap
                             }
-                            .background(
-                                NavigationLink(destination: SwapConfigScreen(communicator: communicator, onClose: onBackClick), isActive: $navigateToSwap) { EmptyView() }
-                            )
+                        }) {
+                            NavButtonContent(label: "SECUENCIAS ÚNICAS", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
                         }
                     }
-                    
-                    Spacer()
                 }
-                .padding(.horizontal, 20)
-                .navigationBarHidden(true)
-                .background(Color.clear)
+                
+                Spacer()
             }
-            .navigationViewStyle(StackNavigationViewStyle())
-
+            .padding(.horizontal, 20)
+            
+            // Capa 4: Ayuda (Popups)
             if let help = activeHelp {
                 HelpPopupView(content: help) {
                     activeHelp = nil
@@ -256,6 +249,7 @@ struct MainContentScreen: View {
                 }
             }
         }
+        // Modales y Sheets
         .sheet(isPresented: $showDeviceSelectionDialog) {
             DeviceSelectionDialog(communicator: communicator, onDeviceSelected: { device in
                 communicator.connect(device: device)

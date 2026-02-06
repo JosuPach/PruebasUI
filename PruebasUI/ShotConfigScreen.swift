@@ -85,7 +85,7 @@ struct ShotConfigScreen: View {
         shotConfig.targetC = cValues[selectedCol]
 
         onSaveConfig(shotConfig)
-        dismiss()
+
     }
 
     var body: some View {
