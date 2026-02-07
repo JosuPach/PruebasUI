@@ -41,28 +41,15 @@ struct ShotConfigScreen: View {
         _selectedCol = State(initialValue: col)
     }
 
-    private func scaleTo99(_ value: Double) -> Int {
-        let clamped = max(0, min(255, value))
-        return Int(((clamped * 99.0) / 255.0).rounded())
-    }
-    
+    // MARK: - Funciones de Escalado
+    private func scaleTo99(_ value: Double) -> Int { Int(((max(0, min(255, value)) * 99.0) / 255.0).rounded()) }
     private func scaleTo20(_ value: Double) -> Int { Int(((value * 20.0) / 255.0).rounded()) }
     private func scaleToCT(_ value: Double) -> Int { Int(((value * 6000.0 / 255.0) - 3000.0).rounded()) }
 
     private func generateSHCommand() -> String {
-        let ix = scaleTo99(Double(cValues[selectedCol]))
-        let iy = scaleTo99(Double(dValues[selectedRow]))
-        let vA = scaleTo99(speedATemp)
-        let vB = scaleTo99(speedBTemp)
-        let ifeed = scaleTo99(delayTemp)
-        let icx = scaleTo20(targetFTemp)
-        let icy = scaleTo20(targetGTemp)
-        let ict = scaleToCT(targetHTemp)
-        
-        return "[SH\(ix),\(iy),\(vA),\(vB),\(ifeed),\(icx),\(icy),\(ict)]"
+        return "[SH\(scaleTo99(Double(cValues[selectedCol]))),\(scaleTo99(Double(dValues[selectedRow]))),\(scaleTo99(speedATemp)),\(scaleTo99(speedBTemp)),\(scaleTo99(delayTemp)),\(scaleTo20(targetFTemp)),\(scaleTo20(targetGTemp)),\(scaleToCT(targetHTemp))]"
     }
 
-    // CORRECCIÓN: Ahora detecta cambios en TODOS los parámetros
     private var isModified: Bool {
         Int(speedATemp.rounded()) != shotConfig.speedA ||
         Int(speedBTemp.rounded()) != shotConfig.speedB ||
@@ -73,57 +60,74 @@ struct ShotConfigScreen: View {
         selectedRow != (dValues.firstIndex(of: shotConfig.targetD) ?? 1) ||
         selectedCol != (cValues.firstIndex(of: shotConfig.targetC) ?? 2)
     }
-
-    private func saveAndSend() {
-        shotConfig.speedA = Int(speedATemp.rounded())
-        shotConfig.speedB = Int(speedBTemp.rounded())
-        shotConfig.delayE = Int(delayTemp.rounded())
-        shotConfig.targetF = targetFTemp.rounded()
-        shotConfig.targetG = targetGTemp.rounded()
-        shotConfig.targetH = targetHTemp.rounded()
-        shotConfig.targetD = dValues[selectedRow]
-        shotConfig.targetC = cValues[selectedCol]
-
-        onSaveConfig(shotConfig)
-
+    
+    // MARK: - Lógica de Test (Modo Remoto Silencioso)
+    private func runCadenceTest() {
+        // 1. Cambiar a modo remoto
+        communicator.sendCommand("[R000]")
+        // 2. Detener cualquier proceso previo
+        communicator.sendCommand("[Z]")
+        // 3. Enviar valor de cadencia escalado 0-255 en formato [EXXX]
+        let cadenceValue = Int(delayTemp.rounded())
+        let cmdE = "[E\(String(format: "%03d", cadenceValue))]"
+        
+        communicator.sendCommand(cmdE)
+        print(cmdE)
+        
+        // Feedback háptico
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
+    private func saveAndSend() {
+        // Al guardar, reactivamos el modo Drill para que los cambios se apliquen a la rutina
+        communicator.sendCommand("[MD]")
+        
+        shotConfig.speedA = Int(speedATemp.rounded()); shotConfig.speedB = Int(speedBTemp.rounded())
+        shotConfig.delayE = Int(delayTemp.rounded()); shotConfig.targetF = targetFTemp.rounded()
+        shotConfig.targetG = targetGTemp.rounded(); shotConfig.targetH = targetHTemp.rounded()
+        shotConfig.targetD = dValues[selectedRow]; shotConfig.targetC = cValues[selectedCol]
+        onSaveConfig(shotConfig)
+        dismiss()
+    }
+
+    // MARK: - Body
     var body: some View {
         ZStack {
             Color(red: 0.05, green: 0.05, blue: 0.07).ignoresSafeArea()
             
-            VStack(spacing: 15) {
+            VStack(spacing: 0) {
                 headerView
                 
-                courtVisualization
-                    .frame(height: 240) // Aumentado ligeramente para acomodar la red
-                    .zIndex(10)
+                VStack {
+                    Spacer()
+                    courtVisualization
+                        .frame(maxWidth: .infinity)
+                    Spacer()
+                }
+                .frame(maxHeight: .infinity)
                 
-                VStack(spacing: 10) {
-                    HStack(spacing: 10) {
-                        ModernParameterSlider(label: "RUEDA A (SUP)", value: $speedATemp, range: 0...255, icon: "circle.and.line.horizontal", displayValue: "\(scaleTo99(speedATemp))")
-                        ModernParameterSlider(label: "RUEDA B (INF)", value: $speedBTemp, range: 0...255, icon: "circle.and.line.horizontal", displayValue: "\(scaleTo99(speedBTemp))")
+                VStack(spacing: 16) {
+                    VStack(spacing: 14) {
+                        CompactParameterSlider(label: "RUEDA A", value: $speedATemp, range: 0...255, icon: "arrow.up.circle", displayValue: "\(scaleTo99(speedATemp))", color: .cyan)
+                        CompactParameterSlider(label: "RUEDA B", value: $speedBTemp, range: 0...255, icon: "arrow.down.circle", displayValue: "\(scaleTo99(speedBTemp))", color: .cyan)
+                        CompactParameterSlider(label: "CADENCIA", value: $delayTemp, range: 0...255, icon: "clock.fill", displayValue: "\(scaleTo99(delayTemp))", color: .green)
+                        CompactParameterSlider(label: "GIRO CT", value: $targetHTemp, range: 0...255, icon: "move.3d", displayValue: "\(scaleToCT(targetHTemp))", color: .orange)
+                        CompactParameterSlider(label: "CART. X", value: $targetFTemp, range: 0...255, icon: "arrow.left.and.right", displayValue: "\(scaleTo20(targetFTemp))", color: .white)
+                        CompactParameterSlider(label: "CART. Y", value: $targetGTemp, range: 0...255, icon: "arrow.up.and.down", displayValue: "\(scaleTo20(targetGTemp))", color: .white)
                     }
+                    .padding(20)
+                    .background(Color.white.opacity(0.04))
+                    .cornerRadius(20)
                     
-                    HStack(spacing: 10) {
-                        ModernParameterSlider(label: "CADENCIA", value: $delayTemp, range: 0...255, icon: "speedometer", displayValue: "\(scaleTo99(delayTemp))")
-                        ModernParameterSlider(label: "GIRO CT", value: $targetHTemp, range: 0...255, icon: "move.3d", displayValue: "\(scaleToCT(targetHTemp))")
-                    }
+                    Text("COMANDO: \(generateSHCommand())")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.cyan.opacity(0.4))
+                        .padding(.top, 4)
                     
-                    HStack(spacing: 10) {
-                        ModernMiniSlider(label: "CARTRACK X", value: $targetFTemp, range: 0...255, displayValue: "\(scaleTo20(targetFTemp))")
-                        ModernMiniSlider(label: "CARTRACK Y", value: $targetGTemp, range: 0...255, displayValue: "\(scaleTo20(targetGTemp))")
-                    }
+                    actionButtons
+                        .padding(.bottom, 10)
                 }
                 .padding(.horizontal)
-                
-                Spacer()
-                
-                Text("COMANDO: \(generateSHCommand())")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(.cyan.opacity(0.5))
-                
-                actionButtons
             }
         }
         .onAppear {
@@ -133,200 +137,176 @@ struct ShotConfigScreen: View {
 
     private var headerView: some View {
         HStack {
-            VStack(alignment: .leading) {
-                Text("DRAGONBOT OS").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.cyan)
-                Text("CONFIGURACIÓN DE TIRO").font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(.white)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("DRAGONBOT OS").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.cyan)
+                Text("EDITAR TIRO").font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(.white)
             }
+            
             Spacer()
-            Image(systemName: "cpu").foregroundColor(.cyan)
+
+            // BOTÓN DE TEST INTEGRADO
+            Button(action: runCadenceTest) {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill")
+                    Text("TEST CADENCIA")
+                }
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.15))
+                .foregroundColor(.orange)
+                .cornerRadius(8)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.4), lineWidth: 1))
+            }
+            .padding(.trailing, 8)
+            
+            VStack(alignment: .trailing) {
+                Circle().fill(communicator.isConnected ? Color.green : Color.red).frame(width: 8, height: 8)
+                Text(communicator.isConnected ? "CONECTADO" : "DESCONECTADO").font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(.gray)
+            }
         }.padding([.horizontal, .top])
     }
 
     private var courtVisualization: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 20).fill(Color.black.opacity(0.4))
-            
-            VStack(spacing: 0) {
-                ZStack {
-                    TennisCourtShape()
-                        .fill(LinearGradient(colors: [Color.cyan.opacity(0.2), Color.clear], startPoint: .bottom, endPoint: .top))
-                        .overlay(TennisCourtLines().stroke(Color.white.opacity(0.15), lineWidth: 1))
-                        .frame(width: 280, height: 160)
+        VStack(spacing: 0) {
+            ZStack {
+                TennisCourtShape()
+                    .fill(LinearGradient(colors: [Color.cyan.opacity(0.15), Color.clear], startPoint: .bottom, endPoint: .top))
+                    .overlay(TennisCourtLines().stroke(Color.white.opacity(0.25), lineWidth: 1.5))
+                    .frame(width: 320, height: 180)
 
-                    // CUADRÍCULA DE SELECCIÓN
-                    VStack(spacing: 20) {
-                        ForEach((0...2).reversed(), id: \.self) { row in
-                            HStack(spacing: 30) {
-                                ForEach(0..<cValues.count, id: \.self) { col in
-                                    let isSelected = selectedRow == row && selectedCol == col
-                                    
-                                    Button(action: {
-                                        UISelectionFeedbackGenerator().selectionChanged()
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            selectedRow = row
-                                            selectedCol = col
+                VStack(spacing: 24) {
+                    ForEach((0...2).reversed(), id: \.self) { row in
+                        HStack(spacing: 35) {
+                            ForEach(0..<cValues.count, id: \.self) { col in
+                                let isSelected = selectedRow == row && selectedCol == col
+                                Button(action: {
+                                    UISelectionFeedbackGenerator().selectionChanged()
+                                    withAnimation(.spring(response: 0.3)) { selectedRow = row; selectedCol = col }
+                                }) {
+                                    ZStack {
+                                        if isSelected {
+                                            Circle().stroke(Color.cyan, lineWidth: 2).frame(width: 34, height: 34)
+                                                .scaleEffect(pulseAnim).opacity(1.3 - pulseAnim)
                                         }
-                                    }) {
-                                        ZStack {
-                                            if isSelected {
-                                                Circle()
-                                                    .stroke(Color.cyan, lineWidth: 2)
-                                                    .frame(width: 35, height: 35)
-                                                    .scaleEffect(pulseAnim)
-                                                    .opacity(1.3 - pulseAnim)
-                                            }
-                                            
-                                            Circle()
-                                                .fill(isSelected ? Color(red: 0.82, green: 0.98, blue: 0.0) : Color.white.opacity(0.15))
-                                                .frame(width: 24, height: 24)
-                                                .overlay(
-                                                    Image(systemName: "tennisball.fill")
-                                                        .resizable().padding(5)
-                                                        .foregroundColor(isSelected ? .black : .clear)
-                                                )
-                                        }
+                                        Circle().fill(isSelected ? Color(red: 0.82, green: 0.98, blue: 0.0) : Color.white.opacity(0.2))
+                                            .frame(width: 22, height: 22)
+                                            .overlay(Image(systemName: "tennisball.fill").resizable().padding(6).foregroundColor(isSelected ? .black : .clear))
                                     }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
+                                }.buttonStyle(PlainButtonStyle())
                             }
                         }
                     }
-                    .offset(y: -5)
                 }
-                .rotation3DEffect(.degrees(-15), axis: (x: 1, y: 0, z: 0))
-                
-                // RED AGREGADA DEBAJO
-                TennisNetView()
-                    .scaleEffect(0.8)
-                    .offset(y: -20) // Ajuste para que parezca estar al final de la cancha
+                .offset(y: -10)
             }
+            .rotation3DEffect(.degrees(-12), axis: (x: 1, y: 0, z: 0))
+            
+            TennisNetView()
+                .scaleEffect(1.0)
+                .offset(y: -25)
         }
-        .padding(.horizontal)
     }
 
     private var actionButtons: some View {
-        HStack(spacing: 12) {
-            // CORRECCIÓN: Ahora llama a onCancel y dismiss
+        HStack(spacing: 15) {
             Button(action: {
+                communicator.sendCommand("[DR]") // Regresar a modo Drill al cancelar
                 onCancel()
                 dismiss()
             }) {
                 Text("CANCELAR").font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .frame(maxWidth: .infinity).padding(.vertical, 15)
-                    .background(Color.white.opacity(0.05)).foregroundColor(.white).cornerRadius(10)
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
+                    .background(Color.white.opacity(0.05)).foregroundColor(.white).cornerRadius(12)
             }
             Button(action: saveAndSend) {
                 Text("GUARDAR Y ENVIAR").font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .frame(maxWidth: .infinity).padding(.vertical, 15)
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(isModified ? Color.cyan : Color.white.opacity(0.1))
-                    .foregroundColor(isModified ? .black : .white.opacity(0.2)).cornerRadius(10)
+                    .foregroundColor(isModified ? .black : .white.opacity(0.2)).cornerRadius(12)
             }.disabled(!isModified)
-        }.padding(.horizontal).padding(.bottom, 15)
+        }
     }
 }
 
-// MARK: - Componentes de Sliders Modernos
-struct ModernParameterSlider: View {
-    let label: String; @Binding var value: Double; let range: ClosedRange<Double>; let icon: String; let displayValue: String
+// MARK: - Componentes de Soporte (Slidery Barras)
+
+struct CompactParameterSlider: View {
+    let label: String; @Binding var value: Double; let range: ClosedRange<Double>
+    let icon: String; let displayValue: String; let color: Color
     @State private var isDragging = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon).font(.system(size: 9)).foregroundColor(.cyan)
-                Text(label).font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(.gray)
+                Text(label).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.white.opacity(0.6))
                 Spacer()
-                Text(displayValue).font(.system(size: 11, weight: .black, design: .monospaced)).foregroundColor(.white)
+                Text(displayValue).font(.system(size: 14, weight: .black, design: .monospaced)).foregroundColor(color)
             }
-            CustomModernBar(value: $value, range: range, isDragging: $isDragging)
-                .frame(height: 20)
+            CustomModernBar(value: $value, range: range, isDragging: $isDragging, mainColor: color)
+                .frame(height: 12)
         }
-        .padding(10).background(Color.white.opacity(0.03)).cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isDragging ? Color.cyan.opacity(0.4) : Color.clear, lineWidth: 1))
     }
 }
-
-
 
 struct CustomModernBar: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     @Binding var isDragging: Bool
+    let mainColor: Color
 
     var body: some View {
         GeometryReader { geo in
-            // Definimos el radio de la bolita para los cálculos
-            let thumbRadius: CGFloat = 8
-            // Calculamos el ancho útil restando el espacio que ocupa la bolita en los extremos
-            let usableWidth = geo.size.width - (thumbRadius * 2)
-            
-            // Calculamos el porcentaje actual (0.0 a 1.0)
+            let width = geo.size.width
             let percentage = CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound))
             
             ZStack(alignment: .leading) {
-                // Fondo de la barra
-                Capsule()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(height: 4)
+                Capsule().fill(Color.black.opacity(0.3))
                 
-                // Progreso
-                Capsule()
-                    .fill(LinearGradient(colors: [.cyan, .blue.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: max(0, percentage * usableWidth + thumbRadius), height: 4)
+                HStack(spacing: 0) {
+                    ForEach(0..<10) { _ in
+                        Spacer()
+                        Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 8)
+                        Spacer()
+                    }
+                }
                 
-                // Bolita (Thumb)
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: isDragging ? 16 : 12, height: isDragging ? 16 : 12)
-                    .shadow(color: .cyan.opacity(isDragging ? 0.8 : 0), radius: 6)
-                    // El offset ahora se mueve solo dentro del usableWidth
-                    .offset(x: percentage * usableWidth)
+                Capsule()
+                    .fill(LinearGradient(colors: [mainColor.opacity(0.3), mainColor], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(0, percentage * width))
+                
+                ZStack {
+                    Circle().fill(Color.black).frame(width: 18, height: 18)
+                    Circle().stroke(Color.white, lineWidth: 2.5).frame(width: 14, height: 14)
+                }
+                .offset(x: (percentage * width) - 9)
+                .shadow(color: .black.opacity(0.5), radius: 2)
             }
-            // Centramos el contenido verticalmente
-            .frame(maxHeight: .infinity)
-            // Añadimos un padding horizontal para que la bolita no toque el borde del contenedor
-            .padding(.horizontal, 0)
-            .contentShape(Rectangle()) // Hace que toda el área sea táctil
+            .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { val in
                         isDragging = true
-                        // Ajustamos el cálculo del toque para que coincida con el área útil
-                        let dragLocation = val.location.x - thumbRadius
-                        let percent = Double(dragLocation / usableWidth)
+                        let percent = Double(val.location.x / width)
                         let newValue = range.lowerBound + (range.upperBound - range.lowerBound) * percent
                         self.value = min(max(range.lowerBound, newValue), range.upperBound)
                     }
-                    .onEnded { _ in
-                        withAnimation(.spring(response: 0.2)) { isDragging = false }
-                    }
+                    .onEnded { _ in isDragging = false }
             )
         }
     }
 }
 
-struct ModernMiniSlider: View {
-    let label: String; @Binding var value: Double; let range: ClosedRange<Double>; let displayValue: String
-    @State private var isDragging = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(.gray)
-            HStack(spacing: 8) {
-                CustomModernBar(value: $value, range: range, isDragging: $isDragging)
-                Text(displayValue).font(.system(size: 10, design: .monospaced)).foregroundColor(.cyan).frame(width: 28)
-            }
-        }
-        .padding(10).background(Color.white.opacity(0.03)).cornerRadius(12)
-    }
-}
-
+// MARK: - Componentes de Estética Visual
 
 struct TennisCourtShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.width * 0.2, y: 0)); path.addLine(to: CGPoint(x: rect.width * 0.8, y: 0))
-        path.addLine(to: CGPoint(x: rect.width * 0.95, y: rect.height)); path.addLine(to: CGPoint(x: rect.width * 0.05, y: rect.height)); path.closeSubpath()
+        path.move(to: CGPoint(x: rect.width * 0.25, y: 0))
+        path.addLine(to: CGPoint(x: rect.width * 0.75, y: 0))
+        path.addLine(to: CGPoint(x: rect.width * 0.98, y: rect.height))
+        path.addLine(to: CGPoint(x: rect.width * 0.02, y: rect.height))
+        path.closeSubpath()
         return path
     }
 }
@@ -334,10 +314,15 @@ struct TennisCourtShape: Shape {
 struct TennisCourtLines: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.width * 0.2, y: 0)); path.addLine(to: CGPoint(x: rect.width * 0.8, y: 0))
-        path.addLine(to: CGPoint(x: rect.width * 0.95, y: rect.height)); path.addLine(to: CGPoint(x: rect.width * 0.05, y: rect.height)); path.closeSubpath()
-        path.move(to: CGPoint(x: rect.width * 0.5, y: 0)); path.addLine(to: CGPoint(x: rect.width * 0.5, y: rect.height))
-        path.move(to: CGPoint(x: rect.width * 0.12, y: rect.height * 0.5)); path.addLine(to: CGPoint(x: rect.width * 0.88, y: rect.height * 0.5))
+        path.move(to: CGPoint(x: rect.width * 0.25, y: 0))
+        path.addLine(to: CGPoint(x: rect.width * 0.75, y: 0))
+        path.addLine(to: CGPoint(x: rect.width * 0.98, y: rect.height))
+        path.addLine(to: CGPoint(x: rect.width * 0.02, y: rect.height))
+        path.closeSubpath()
+        path.move(to: CGPoint(x: rect.width * 0.5, y: 0))
+        path.addLine(to: CGPoint(x: rect.width * 0.5, y: rect.height))
+        path.move(to: CGPoint(x: rect.width * 0.15, y: rect.height * 0.45))
+        path.addLine(to: CGPoint(x: rect.width * 0.85, y: rect.height * 0.45))
         return path
     }
 }
@@ -346,34 +331,35 @@ struct TennisNetView: View {
     var body: some View {
         ZStack {
             HStack {
-                Capsule().fill(Color.gray).frame(width: 3, height: 40)
+                Rectangle().fill(Color.gray.opacity(0.5)).frame(width: 2, height: 25)
                 Spacer()
-                Capsule().fill(Color.gray).frame(width: 3, height: 40)
+                Rectangle().fill(Color.gray.opacity(0.5)).frame(width: 2, height: 25)
             }
-            ZStack {
-                Path { path in
-                    let hStep: CGFloat = 7
-                    let vStep: CGFloat = 6
-                    for i in 0...50 {
-                        let x = CGFloat(i) * hStep
-                        path.move(to: CGPoint(x: x, y: 0))
-                        path.addLine(to: CGPoint(x: x, y: 35))
-                    }
-                    for i in 0...6 {
-                        let y = CGFloat(i) * vStep
-                        path.move(to: CGPoint(x: 0, y: y))
-                        path.addLine(to: CGPoint(x: 340, y: y))
-                    }
+            .frame(width: 325)
+            
+            Path { path in
+                let hStep: CGFloat = 6
+                let vStep: CGFloat = 5
+                for i in 0...54 {
+                    let x = CGFloat(i) * hStep
+                    path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: 20))
                 }
-                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
-                
-                VStack {
-                    Rectangle().fill(Color.white).frame(height: 3)
-                        .shadow(color: .black.opacity(0.4), radius: 1, y: 1)
-                    Spacer()
+                for i in 0...4 {
+                    let y = CGFloat(i) * vStep
+                    path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: 320, y: y))
                 }
             }
-            .frame(width: 330, height: 35)
+            .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+            .frame(width: 320, height: 20)
+            
+            VStack {
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(height: 2.5)
+                    .shadow(color: .white.opacity(0.3), radius: 2)
+                Spacer()
+            }
+            .frame(width: 326, height: 22)
         }
     }
 }

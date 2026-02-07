@@ -121,6 +121,7 @@ struct MainContentScreen: View {
     @State private var showDeviceSelectionDialog = false
     @State private var showConfigDialog = false
     @State private var showJoystickDialog = false
+    @State private var showIAPopup = false // <--- NUEVO ESTADO
     @State private var currentConfigMode: DragonBotMode = .NONE
     @State private var gridPhase: CGFloat = 0
     @State private var activeHelp: HelpContent? = nil
@@ -128,55 +129,31 @@ struct MainContentScreen: View {
 
     let helpData: [String: HelpContent] = [
         "MANUAL": HelpContent(title: "MODO MANUAL", description: "CONTROLE SU DRAGONBOT AJUSTANDOLO MANUALMENTE CON LAS PERILLAS TRASERAS.", icon: "hand.tap.fill", color: .dragonBotPrimary),
-        "IA": HelpContent(title: "MODO IA", description: "CONTROL POR VISIÓN ARTIFICIAL, LA DRAGONBOT DETECTA AL JUGADOR AUTOMATICAMENTE.", icon: "bolt.shield.fill", color: .dragonBotSecondary),
+        "IA": HelpContent(title: "MODO IA", description: "INTERFAZ DE VISIÓN ARTIFICIAL Y GESTIÓN DE ENERGÍA.", icon: "bolt.shield.fill", color: .dragonBotSecondary),
         "REMOTO": HelpContent(title: "REMOTO", description: "AJUSTE LA VELOCIDAD DESDE SU TELÉFONO REMOTAMENTE.", icon: "slider.horizontal.3", color: .dragonBotPrimary),
         "JOYSTICK": HelpContent(title: "CONTROL CARTRACK", description: "CONTROL MANUAL DEL MOVIMIENTO DEL CARRITO.", icon: "gamecontroller.fill", color: .dragonBotSecondary),
         "DRILLS": HelpContent(title: "SECUENCIAS DE TIRO", description: "EDITE Y PROGRAME UNA SERIE DE TIROS CONSECUTIVOS.", icon: "scope", color: .dragonBotPrimary),
         "SWAP": HelpContent(title: "SECUENCIA ÚNICA", description: "CONFIGURACIÓN DE TIRO RÁPIDO CON INTERCAMBIO DE PARÁMETROS.", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
     ]
 
-    init(communicator: BLECommunicator, shotsMap: Binding<[Int : ShotConfig]>, onBackClick: @escaping () -> Void, onDrillsClick: @escaping () -> Void, onSwapClick: @escaping () -> Void, onConfigShot: @escaping (Int) -> Void, onAddShot: @escaping () -> Void, onDeleteShot: @escaping (Int) -> Void) {
-        self.communicator = communicator
-        self._shotsMap = shotsMap
-        self.onBackClick = onBackClick
-        self.onDrillsClick = onDrillsClick
-        self.onSwapClick = onSwapClick
-        self.onConfigShot = onConfigShot
-        self.onAddShot = onAddShot
-        self.onDeleteShot = onDeleteShot
-        // Quitamos cualquier rastro de estilo de tabla por si acaso
-        UITableView.appearance().backgroundColor = .clear
-    }
-    
     var body: some View {
         ZStack {
-            // Capa 1: Fondo Base
             Color.black.ignoresSafeArea()
-            
-            // Capa 2: Efectos Visuales
             StarFieldView()
             InfinitePerspectiveGrid(phase: gridPhase)
                 .stroke(LinearGradient(colors: [Color.dragonBotSecondary.opacity(0.3), .clear], startPoint: .bottom, endPoint: .top), lineWidth: 1.0)
-                .onAppear {
-                    withAnimation(Animation.linear(duration: 5.0).repeatForever(autoreverses: false)) { gridPhase = 1.0 }
-                }
+                .onAppear { withAnimation(Animation.linear(duration: 5.0).repeatForever(autoreverses: false)) { gridPhase = 1.0 } }
             
-            // Capa 3: Contenido Principal (Ya no usa NavigationView)
             VStack(spacing: 20) {
-                // Header Compacto
+                // Header
                 VStack(spacing: 5) {
-                    Text("DRAGONBOT")
-                        .font(.system(size: 32, weight: .black, design: .monospaced))
-                        .foregroundColor(.white).tracking(6)
-                    Text("TACTICAL INTERFACE V1.0")
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
-                }
-                .padding(.top, 10)
+                    Text("DRAGONBOT").font(.system(size: 32, weight: .black, design: .monospaced)).foregroundColor(.white).tracking(6)
+                    Text("TACTICAL INTERFACE V1.1").font(.system(size: 8, design: .monospaced)).foregroundColor(.white.opacity(0.4))
+                }.padding(.top, 10)
                 
                 ConnectionWarningView(communicator: communicator, onConnectClick: { showDeviceSelectionDialog = true })
                 
-                // MODOS DE OPERACIÓN
+                // 1. MODOS DE OPERACIÓN
                 ControlSection(title: "MODOS DE OPERACIÓN") {
                     HStack(spacing: 12) {
                         CompactModeButton(label: "MANUAL", icon: "hand.tap.fill", color: .dragonBotPrimary) {
@@ -185,10 +162,11 @@ struct MainContentScreen: View {
                                 communicator.sendCommand("[L000]")
                             }
                         }
+                        // Botón de IA ahora abre el popup
                         CompactModeButton(label: "MODO IA", icon: "bolt.shield.fill", color: .dragonBotSecondary) {
                             checkHelp(key: "IA", wasSeen: hasSeenIA) {
                                 hasSeenIA = true
-                                communicator.sendCommand("[F000]")
+                                showIAPopup = true
                             }
                         }
                         CompactModeButton(label: "REMOTO", icon: "slider.horizontal.3", color: .dragonBotPrimary) {
@@ -201,7 +179,30 @@ struct MainContentScreen: View {
                     }
                 }
 
-                // CONTROL CARTRACK
+                // 2. PROGRAMAS TÁCTICOS (AHORA PRIMERO)
+                ControlSection(title: "PROGRAMAS TÁCTICOS") {
+                    VStack(spacing: 12) {
+                        Button(action: {
+                            checkHelp(key: "DRILLS", wasSeen: hasSeenDrills) {
+                                hasSeenDrills = true
+                                onDrillsClick()
+                            }
+                        }) {
+                            NavButtonContent(label: "EDITOR DE SECUENCIAS", icon: "scope", color: .dragonBotPrimary)
+                        }
+
+                        Button(action: {
+                            checkHelp(key: "SWAP", wasSeen: hasSeenSwap) {
+                                hasSeenSwap = true
+                                onSwapClick()
+                            }
+                        }) {
+                            NavButtonContent(label: "SECUENCIAS ÚNICAS", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
+                        }
+                    }
+                }
+
+                // 3. CONTROL CARTRACK (AHORA SEGUNDO)
                 ControlSection(title: "SISTEMA CARTRACK") {
                     Button(action: {
                         checkHelp(key: "JOYSTICK", wasSeen: hasSeenJoystick) {
@@ -213,34 +214,11 @@ struct MainContentScreen: View {
                     }
                 }
                 
-                // PROGRAMAS (Navegación manual via Callbacks)
-                ControlSection(title: "PROGRAMAS TÁCTICOS") {
-                    VStack(spacing: 12) {
-                        Button(action: {
-                            checkHelp(key: "DRILLS", wasSeen: hasSeenDrills) {
-                                hasSeenDrills = true
-                                onDrillsClick() // <--- Ejecuta la transición al editor
-                            }
-                        }) {
-                            NavButtonContent(label: "EDITOR DE SECUENCIAS", icon: "scope", color: .dragonBotPrimary)
-                        }
-
-                        Button(action: {
-                            checkHelp(key: "SWAP", wasSeen: hasSeenSwap) {
-                                hasSeenSwap = true
-                                onSwapClick() // <--- Ejecuta la transición a swap
-                            }
-                        }) {
-                            NavButtonContent(label: "SECUENCIAS ÚNICAS", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
-                        }
-                    }
-                }
-                
                 Spacer()
             }
             .padding(.horizontal, 20)
             
-            // Capa 4: Ayuda (Popups)
+            // Popups de Ayuda
             if let help = activeHelp {
                 HelpPopupView(content: help) {
                     activeHelp = nil
@@ -249,7 +227,7 @@ struct MainContentScreen: View {
                 }
             }
         }
-        // Modales y Sheets
+        // --- MODALES ---
         .sheet(isPresented: $showDeviceSelectionDialog) {
             DeviceSelectionDialog(communicator: communicator, onDeviceSelected: { device in
                 communicator.connect(device: device)
@@ -261,6 +239,12 @@ struct MainContentScreen: View {
                 showConfigDialog = false
                 currentConfigMode = .NONE
             }, onSave: { command in communicator.sendCommand(command) })
+        }
+        // NUEVO POPUP DE IA
+        .sheet(isPresented: $showIAPopup) {
+            IAConfigurationDialog(onDismiss: { showIAPopup = false }, onSendCommand: { cmd in
+                communicator.sendCommand(cmd)
+            })
         }
         .fullScreenCover(isPresented: $showJoystickDialog) {
             JoystickRemoteDialog(communicator: communicator) { showJoystickDialog = false }
@@ -568,7 +552,78 @@ struct JoystickView: View {
     }
 }
 
-// MARK: - LISTA DE SLIDERS MANUALES REESTILIZADA
+struct IAConfigurationDialog: View {
+    let onDismiss: () -> Void
+    let onSendCommand: (String) -> Void
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 30) {
+                HStack {
+                    Text("MODO IA")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(.dragonBotSecondary)
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.white.opacity(0.5)).font(.title2)
+                    }
+                }
+                .padding()
+                .background(Color.white.opacity(0.05))
+                
+                Spacer()
+                
+                VStack(spacing: 20) {
+                    // Botón que antes era el de IA directo
+                    Button(action: {
+                        onSendCommand("[F000]")
+                        onDismiss()
+                    }) {
+                        HStack {
+                            Image(systemName: "bolt.shield.fill")
+                            Text("ACTIVAR IA")
+                        }
+                        .font(.system(size: 16, weight: .black, design: .monospaced))
+                        .foregroundColor(.dragonBotSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 25)
+                        .background(Color.dragonBotSecondary.opacity(0.15))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.dragonBotSecondary, lineWidth: 2))
+                    }
+                    
+                    // Botón Shutdown movido desde Remoto
+                    Button(action: {
+                        onSendCommand("[O000]")
+                        onDismiss()
+                    }) {
+                        HStack {
+                            Image(systemName: "power")
+                            Text("APAGAR IA")
+                        }
+                        .font(.system(size: 16, weight: .black, design: .monospaced))
+                        .foregroundColor(.dragonBotError)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 25)
+                        .background(Color.dragonBotError.opacity(0.15))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.dragonBotError, lineWidth: 2))
+                    }
+                }
+                .padding(30)
+                
+                Spacer()
+                
+                Text("ADVERTENCIA: EL APAGADO DETIENE TODOS LOS MOTORES INMEDIATAMENTE")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.3))
+                    .padding(.bottom, 20)
+            }
+        }
+    }
+}
+
+// MARK: - LISTA DE SLIDERS (ACTUALIZADA: SIN SHUTDOWN)
 struct ManualSlidersList: View {
     let onSave: (String) -> Void
     @State private var vA: Float = 127
@@ -585,33 +640,19 @@ struct ManualSlidersList: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 30) {
-                // Botones de acción rápida con estilo mejorado
+                // Ahora solo queda el botón de Modo Remoto aquí
                 HStack(spacing: 15) {
-                    Button("SISTEMA OFF") { onSave("[O000]") }
-                        .buttonStyle(TerminalButtonStyle(color: .dragonBotError))
-                    
-                    Button("MODO REMOTO") { onSave("[R000]") }
+                    Button("ESTABLECER MODO REMOTO") { onSave("[R000]") }
                         .buttonStyle(TerminalButtonStyle(color: .dragonBotSecondary))
                 }
                 .padding(.top, 10)
                 
-                // Sección de Sliders
                 VStack(spacing: 35) {
-                    SliderItem(label: "ELEVACIÓN SUPERIOR (A)", value: $vA, color: .dragonBotPrimary) {
-                        send(prefix: "A", val: vA)
-                    }
-                    SliderItem(label: "ELEVACIÓN INFERIOR (B)", value: $vB, color: .dragonBotPrimary) {
-                        send(prefix: "B", val: vB)
-                    }
-                    SliderItem(label: "POTENCIA TURBINA 1 (C)", value: $vC, color: .dragonBotSecondary) {
-                        send(prefix: "C", val: vC)
-                    }
-                    SliderItem(label: "POTENCIA TURBINA 2 (D)", value: $vD, color: .dragonBotSecondary) {
-                        send(prefix: "D", val: vD)
-                    }
-                    SliderItem(label: "FRECUENCIA DISPARO (E)", value: $vE, color: .white) {
-                        send(prefix: "E", val: vE)
-                    }
+                    SliderItem(label: "ELEVACIÓN SUPERIOR (A)", value: $vA, color: .dragonBotPrimary) { send(prefix: "A", val: vA) }
+                    SliderItem(label: "ELEVACIÓN INFERIOR (B)", value: $vB, color: .dragonBotPrimary) { send(prefix: "B", val: vB) }
+                    SliderItem(label: "POTENCIA TURBINA 1 (C)", value: $vC, color: .dragonBotSecondary) { send(prefix: "C", val: vC) }
+                    SliderItem(label: "POTENCIA TURBINA 2 (D)", value: $vD, color: .dragonBotSecondary) { send(prefix: "D", val: vD) }
+                    SliderItem(label: "FRECUENCIA DISPARO (E)", value: $vE, color: .white) { send(prefix: "E", val: vE) }
                 }
                 .padding(.bottom, 40)
             }
@@ -619,7 +660,6 @@ struct ManualSlidersList: View {
         }
     }
 }
-
 // MARK: - SLIDER ITEM CYBERPUNK MODERNO
 struct SliderItem: View {
     let label: String

@@ -155,7 +155,7 @@ struct InicioScreen: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             withAnimation(.easeIn(duration: 0.8)) { buttonOpacity = 1.0 }
         }
-        startYOLOSimulation()
+        //startYOLOSimulation()
         startSubtitleCycle()
     }
 
