@@ -154,31 +154,46 @@ struct MainContentScreen: View {
                 ConnectionWarningView(communicator: communicator, onConnectClick: { showDeviceSelectionDialog = true })
                 
                 // 1. MODOS DE OPERACIÓN
-                ControlSection(title: "MODOS DE OPERACIÓN") {
-                    HStack(spacing: 12) {
-                        CompactModeButton(label: "MANUAL", icon: "hand.tap.fill", color: .dragonBotPrimary) {
-                            checkHelp(key: "MANUAL", wasSeen: hasSeenManual) {
-                                hasSeenManual = true
-                                communicator.sendCommand("[L000]")
-                            }
+                // 1. MODOS DE OPERACIÓN
+                // 1. MODOS DE OPERACIÓN
+                ControlSection(title: "MODOS TÁCTICOS Y NAVEGACIÓN") {
+                    VStack(spacing: 12) {
+                        
+                        // MODO MANUAL: Ahora abre el Joystick (FullScreen)
+                        Button(action: {
+                                    communicator.sendCommand("[L000]") // Comando directo para activar modo manual
+                                    // Aquí puedes añadir una pequeña vibración o feedback visual si lo deseas
+                                }) {
+                                    NavButtonContentWithGraphic(
+                                        label: "MANUAL CONTROL",
+                                        color: .dragonBotPrimary,
+                                        graphic: ManualIconView(color: .dragonBotPrimary)
+                                    )
+                                }
+                        
+                        // MODO IA: Mantiene su popup de Sistema IA
+                        Button(action: { showIAPopup = true }) {
+                            NavButtonContentWithGraphic(
+                                label: "SISTEMA IA",
+                                color: .dragonBotSecondary,
+                                graphic: IAIconView(color: .dragonBotSecondary)
+                            )
                         }
-                        // Botón de IA ahora abre el popup
-                        CompactModeButton(label: "MODO IA", icon: "bolt.shield.fill", color: .dragonBotSecondary) {
-                            checkHelp(key: "IA", wasSeen: hasSeenIA) {
-                                hasSeenIA = true
-                                showIAPopup = true
-                            }
-                        }
-                        CompactModeButton(label: "REMOTO", icon: "slider.horizontal.3", color: .dragonBotPrimary) {
-                            checkHelp(key: "REMOTO", wasSeen: hasSeenSliders) {
-                                hasSeenSliders = true
-                                currentConfigMode = .MANUAL
-                                showConfigDialog = true
-                            }
+                        
+                        // MODO REMOTO: Ahora abre la lista de Sliders (Sheet)
+                        Button(action: {
+                            currentConfigMode = .MANUAL // Asegúrate de tener este caso en tu enum DragonBotMode
+                            showConfigDialog = true     // <--- Invertido: Ahora abre parámetros remotos
+                        }) {
+                            NavButtonContentWithGraphic(
+                                label: "CONTROL REMOTO",
+                                color: .orange,
+                                graphic: RemoteIconView(color: .orange)
+                            )
                         }
                     }
+                    .padding(.horizontal, 5)
                 }
-
                 // 2. PROGRAMAS TÁCTICOS (AHORA PRIMERO)
                 ControlSection(title: "PROGRAMAS TÁCTICOS") {
                     VStack(spacing: 12) {
@@ -188,7 +203,11 @@ struct MainContentScreen: View {
                                 onDrillsClick()
                             }
                         }) {
-                            NavButtonContent(label: "EDITOR DE SECUENCIAS", icon: "scope", color: .dragonBotPrimary)
+                            NavButtonContentWithGraphic(
+                                label: "EDITOR DE SECUENCIAS",
+                                color: .dragonBotPrimary,
+                                graphic: BuiltInIconView(color: .dragonBotPrimary)
+                            )
                         }
 
                         Button(action: {
@@ -197,7 +216,11 @@ struct MainContentScreen: View {
                                 onSwapClick()
                             }
                         }) {
-                            NavButtonContent(label: "SECUENCIAS ÚNICAS", icon: "arrow.triangle.2.circlepath", color: .dragonBotSecondary)
+                            NavButtonContentWithGraphic(
+                                label: "SECUENCIAS ÚNICAS",
+                                color: .dragonBotSecondary,
+                                graphic: WarmUpIconView(color: .dragonBotSecondary)
+                            )
                         }
                     }
                 }
@@ -207,10 +230,14 @@ struct MainContentScreen: View {
                     Button(action: {
                         checkHelp(key: "JOYSTICK", wasSeen: hasSeenJoystick) {
                             hasSeenJoystick = true
-                            showJoystickDialog = true
+                            showJoystickDialog = true // <--- El popup de Joystick ahora vive aquí
                         }
                     }) {
-                        NavButtonContent(label: "CONTROL CARTRACK", icon: "gamecontroller.fill", color: .dragonBotSecondary)
+                        NavButtonContent(
+                            label: "CONTROL CARTRACK",
+                            icon: "gamecontroller.fill",
+                            color: .dragonBotSecondary
+                        )
                     }
                 }
                 
@@ -774,5 +801,264 @@ struct TerminalButtonStyle: ButtonStyle {
             .cornerRadius(8)
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(color.opacity(0.5), lineWidth: 1.5))
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+    }
+}
+
+struct WarmUpIconView: View {
+    var color: Color
+    var body: some View {
+        ZStack {
+            // Mini cancha
+            TennisCourtShape()
+                .fill(color.opacity(0.1))
+                .overlay(TennisCourtLines().stroke(color.opacity(0.3), lineWidth: 0.5))
+            
+            // Red central
+            Rectangle()
+                .fill(color.opacity(0.5))
+                .frame(height: 1)
+                .offset(y: -10) // Ajustado a la perspectiva de tu TennisCourtShape
+            
+            // Trayectorias de calentamiento (líneas punteadas)
+            Path { path in
+                path.move(to: CGPoint(x: 30, y: 35))
+                path.addQuadCurve(to: CGPoint(x: 10, y: 5), control: CGPoint(x: 20, y: 15))
+                
+                path.move(to: CGPoint(x: 30, y: 35))
+                path.addQuadCurve(to: CGPoint(x: 50, y: 5), control: CGPoint(x: 40, y: 15))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 3]))
+            
+            // Punto de origen
+            Circle().fill(color).frame(width: 4, height: 4).offset(y: 15)
+        }
+        .frame(width: 60, height: 40)
+    }
+}
+
+struct BuiltInIconView: View {
+    var color: Color
+    
+    var body: some View {
+        ZStack {
+            VStack(spacing: 8) {
+                // Bloque Superior
+                sequenceBlock
+                
+                // Bloque Inferior
+                sequenceBlock
+            }
+            
+            // Flechas de flujo (Loop)
+            flowArrows
+        }
+        .frame(width: 60, height: 40)
+    }
+    
+    // Representación de los rectángulos con puntos (tiros)
+    private var sequenceBlock: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 2)
+                .stroke(color, lineWidth: 1)
+                .frame(width: 40, height: 14)
+                .background(RoundedRectangle(cornerRadius: 2).fill(color.opacity(0.1)))
+            
+            // Rejilla de puntos estilo la imagen de referencia
+            VStack(spacing: 2) {
+                ForEach(0..<2) { _ in
+                    HStack(spacing: 2) {
+                        ForEach(0..<5) { _ in
+                            Circle()
+                                .fill(color.opacity(0.6))
+                                .frame(width: 2, height: 2)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Dibujo de las flechas laterales y de conexión
+    private var flowArrows: some View {
+        Canvas { context, size in
+            let w = size.width
+            let h = size.height
+            let colorIn = color
+            
+            var path = Path()
+            
+            // Flecha de bajada (derecha)
+            path.move(to: CGPoint(x: w * 0.85, y: h * 0.35))
+            path.addLine(to: CGPoint(x: w * 0.85, y: h * 0.65))
+            
+            // Flecha de retorno (izquierda - el bucle)
+            path.move(to: CGPoint(x: w * 0.15, y: h * 0.65))
+            path.addLine(to: CGPoint(x: w * 0.05, y: h * 0.65)) // Salida lateral
+            path.addLine(to: CGPoint(x: w * 0.05, y: h * 0.35)) // Subida
+            path.addLine(to: CGPoint(x: w * 0.15, y: h * 0.35)) // Re-entrada
+            
+            context.stroke(path, with: .color(colorIn.opacity(0.8)), lineWidth: 1)
+            
+            // Cabezas de flecha pequeñas
+            // (Opcional: puedes añadir pequeños triángulos al final de las líneas para más detalle)
+        }
+    }
+}
+
+// MARK: - BOTÓN DE NAVEGACIÓN ACTUALIZADO
+struct NavButtonContentWithGraphic<Graphic: View>: View {
+    let label: String
+    let color: Color
+    let graphic: Graphic
+    
+    var body: some View {
+        HStack(spacing: 15) {
+            // El gráfico estilo la imagen compartida
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(0.3))
+                    .frame(width: 80, height: 60)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(color.opacity(0.5), lineWidth: 1))
+                
+                graphic
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(.system(size: 14, weight: .black, design: .monospaced))
+                    .foregroundColor(.white)
+                Text("SISTEMA TÁCTICO")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(color.opacity(0.7))
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(color.opacity(0.5))
+        }
+        .padding(10)
+        .background(color.opacity(0.05))
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(color.opacity(0.2), lineWidth: 1))
+    }
+}
+
+struct ManualIconView: View {
+    var color: Color
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 6) {
+            ForEach(0..<3) { i in
+                ZStack(alignment: .bottom) {
+                    Rectangle() // Carril
+                        .fill(color.opacity(0.2))
+                        .frame(width: 2, height: 25)
+                    
+                    Circle() // Knob
+                        .fill(color)
+                        .frame(width: 8, height: 8)
+                        .offset(y: i == 1 ? -15 : -5) // Diferentes alturas
+                        .shadow(color: color, radius: 2)
+                }
+            }
+        }
+        .frame(width: 60, height: 40)
+    }
+}
+
+struct IAIconView: View {
+    var color: Color
+    var body: some View {
+        ZStack {
+            // Conexiones de fondo
+            Path { path in
+                path.move(to: CGPoint(x: 15, y: 10))
+                path.addLine(to: CGPoint(x: 45, y: 30))
+                path.move(to: CGPoint(x: 15, y: 30))
+                path.addLine(to: CGPoint(x: 45, y: 10))
+                path.move(to: CGPoint(x: 30, y: 5))
+                path.addLine(to: CGPoint(x: 30, y: 35))
+            }
+            .stroke(color.opacity(0.3), lineWidth: 1)
+            
+            // Nodos
+            let positions = [
+                CGPoint(x: 15, y: 10), CGPoint(x: 45, y: 10),
+                CGPoint(x: 30, y: 20),
+                CGPoint(x: 15, y: 30), CGPoint(x: 45, y: 30)
+            ]
+            
+            ForEach(0..<positions.count, id: \.self) { i in
+                Circle()
+                    .fill(color)
+                    .frame(width: 5, height: 5)
+                    .position(positions[i])
+                    .shadow(color: color, radius: 3)
+            }
+        }
+        .frame(width: 60, height: 40)
+    }
+}
+
+struct RemoteIconView: View {
+    var color: Color
+    var body: some View {
+        VStack(spacing: 2) {
+            // Ondas de señal
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(0..<4) { i in
+                    Rectangle()
+                        .fill(color.opacity(Double(i + 1) * 0.2))
+                        .frame(width: 3, height: CGFloat(5 + (i * 4)))
+                }
+            }
+            
+            // Mini Joystick / D-Pad
+            ZStack {
+                Circle().stroke(color, lineWidth: 1).frame(width: 20, height: 20)
+                Rectangle().fill(color).frame(width: 1, height: 10)
+                Rectangle().fill(color).frame(width: 10, height: 1)
+            }
+        }
+        .frame(width: 60, height: 40)
+    }
+}
+
+struct CartrackIconView: View {
+    var color: Color
+    var body: some View {
+        ZStack {
+            // Rejilla de coordenadas de fondo
+            HStack(spacing: 10) {
+                ForEach(0..<3) { _ in
+                    Rectangle().fill(color.opacity(0.1)).frame(width: 1)
+                }
+            }
+            
+            // "Robot" o Carrito
+            VStack(spacing: 4) {
+                RoundedRectangle(cornerRadius: 2)
+                    .stroke(color, lineWidth: 1.5)
+                    .frame(width: 25, height: 15)
+                    .background(color.opacity(0.1))
+                    .overlay(
+                        HStack {
+                            Circle().fill(color).frame(width: 4)
+                            Spacer()
+                            Circle().fill(color).frame(width: 4)
+                        }.padding(.horizontal, 2)
+                    )
+                
+                // Rastro de movimiento
+                Path { path in
+                    path.move(to: CGPoint(x: -10, y: 5))
+                    path.addLine(to: CGPoint(x: 10, y: 5))
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                .frame(width: 20, height: 1)
+            }
+        }
+        .frame(width: 60, height: 40)
     }
 }

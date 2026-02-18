@@ -12,18 +12,26 @@ struct SwapConfig {
     var ct: Double = 127
     
     func scaleTo99(_ value: Double) -> Int { Int(((value * 99.0) / 255.0).rounded()) }
-    func scaleTo20(_ value: Double) -> Int { Int(((value * 20.0) / 255.0).rounded()) }
+    
+    // NUEVA LÓGICA: Mapea 0...255 a -20...20
+    func scaleToSigned20(_ value: Double) -> Int {
+        Int(((value * 40.0) / 255.0).rounded()) - 20
+    }
+    
     func scaleToCT(_ value: Double) -> Int { Int(((value * 6000.0 / 255.0) - 3000.0).rounded()) }
     
     func generateCommand(index: Int) -> String {
         let prefix = "Y\(index)"
-        return "[\(prefix),\(scaleTo99(x)),\(scaleTo99(y)),\(scaleTo99(speedA)),\(scaleTo99(speedB)),\(scaleTo99(feed)),\(scaleTo20(cx)),\(scaleTo20(cy)),\(scaleToCT(ct))]"
+        // Usamos la nueva función scaleToSigned20 para cx y cy
+        return "[\(prefix),\(scaleTo99(x)),\(scaleTo99(y)),\(scaleTo99(speedA)),\(scaleTo99(speedB)),\(scaleTo99(feed)),\(scaleToSigned20(cx)),\(scaleToSigned20(cy)),\(scaleToCT(ct))]"
     }
     
     func getDisplayValue(for key: String, raw: Double) -> String {
         switch key {
         case "x", "y", "feed": return "\(scaleTo99(raw))"
-        case "cx", "cy": return "\(scaleTo20(raw))"
+        case "cx", "cy":
+            let val = scaleToSigned20(raw)
+            return val > 0 ? "+\(val)" : "\(val)" // Añade el '+' visual si es positivo
         case "ct": return "\(scaleToCT(raw))"
         default: return "\(Int(raw.rounded()))"
         }
@@ -153,14 +161,34 @@ struct SwapConfigScreen: View {
                 editorHeader(id: id)
                 ScrollView {
                     VStack(spacing: 25) {
-                        ZStack(alignment: .bottom) {
-                            TennisCourtShape().fill(LinearGradient(colors: [Color.cyan.opacity(0.15), Color.cyan.opacity(0.05)], startPoint: .top, endPoint: .bottom))
-                            TennisCourtLines().stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        // --- BLOQUE DE LA CANCHA ACTUALIZADO ---
+                        /// ... dentro de editorModal(id: Int)
+                        ZStack(alignment: .bottom) { // Red abajo (Cerca del usuario)
+                            // Fondo de la cancha invertido
+                            TennisCourtShape()
+                                .fill(LinearGradient(
+                                    colors: [Color(red: 0.1, green: 0.25, blue: 0.1), Color(red: 0.15, green: 0.35, blue: 0.15)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ))
+                            
+                            // Asumiendo que TennisCourtLines ya dibuja la T según tu perspectiva previa
+                            TennisCourtLines()
+                                .stroke(Color.white.opacity(0.8), lineWidth: 1.5)
+                            
+                            // Capas de interacción
                             courtArcLayer
-                            TennisNetView().offset(y: 10)
                             courtBallInteraction
+                            
+                            // RED: Ahora en la parte inferior (Jugador en la red)
+                            TennisNetView()
+                                .scaleEffect(x: 1.0, y: 1.0)
+                                .offset(y: 6) // Ajuste para que asiente en el borde inferior
                         }
-                        .frame(height: 200).padding(.top, 10)
+                        .frame(height: 200)
+                        .padding(.top, 5)
+                        // ...
+                        // ---------------------------------------
                         
                         parameterGroup(title: "POTENCIA Y CADENCIA") {
                             parameterSlider(label: "RUEDA A", value: $tempConfig.speedA, id: "speedA", range: 0...255)
@@ -175,6 +203,13 @@ struct SwapConfigScreen: View {
                         parameterGroup(title: "COORDENADAS TÁCTILES") {
                             parameterSlider(label: "EJE X (ANCHO)", value: $tempConfig.x, id: "x", range: 0...255)
                             parameterSlider(label: "EJE Y (LARGO)", value: $tempConfig.y, id: "y", range: 0...255)
+                        }
+                        
+                        parameterGroup(title: "CURVATURA PERSONALIZADA (CX/CY)") {
+                            // El rango del slider sigue siendo 0...255 para mantener la resolución,
+                            // la estructura se encarga de convertirlo a -20...20
+                            parameterSlider(label: "CAR EJE X (CX)", value: $tempConfig.cx, id: "cx", range: 0...255)
+                            parameterSlider(label: "CAR EJE Y (CY)", value: $tempConfig.cy, id: "cy", range: 0...255)
                         }
                     }.padding(20)
                 }
@@ -244,23 +279,59 @@ struct SwapConfigScreen: View {
         }.padding(.horizontal).padding(.vertical, 10).background(Color.black.opacity(0.4))
     }
 
+    // MARK: - Botones de Ejecución Actualizados
     private var executionButtons: some View {
         VStack(spacing: 12) {
-            actionButton(title: "ACTIVAR MODO SWAP", icon: "bolt.horizontal.fill", color: .blue) { communicator.sendCommand("[WA]") }
+            // Botón principal de modo
+            actionButton(title: "ACTIVAR MODO SWAP", icon: "bolt.horizontal.fill", color: .blue) {
+                communicator.sendCommand("[WA]")
+            }
+            
             HStack(spacing: 12) {
-                actionButton(title: "EJECUTAR", icon: "play.circle.fill", color: .cyan) { communicator.sendCommand("[PL]") }
-                Button(action: { isInfiniteActive.toggle(); communicator.sendCommand("[U]") }) {
+                // Botón EJECUTAR [PL]
+                actionButton(title: "EJECUTAR", icon: "play.circle.fill", color: .cyan) {
+                    communicator.sendCommand("[PL]")
+                }
+                
+                // NUEVO: Botón DETENER SWAP [V]
+                Button(action: {
+                    communicator.sendCommand("[V]")
+                    isInfiniteActive = false // Opcional: Desactivamos el visual de infinito al detener
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                }) {
+                    HStack {
+                        Image(systemName: "stop.fill")
+                        Text("DETENER")
+                    }
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.red.opacity(0.15))
+                    .foregroundColor(.red)
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.red.opacity(0.3), lineWidth: 1))
+                }
+                
+                // Botón INFINITO [U]
+                Button(action: {
+                    isInfiniteActive.toggle()
+                    communicator.sendCommand("[U]")
+                }) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 10).fill(isInfiniteActive ? Color.purple : Color.purple.opacity(0.15))
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(isInfiniteActive ? Color.purple : Color.purple.opacity(0.15))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.purple, lineWidth: 1.5))
+                        
                         VStack(spacing: 2) {
                             Image(systemName: "infinity").font(.system(size: 18, weight: .bold))
                             Text(isInfiniteActive ? "ON" : "SIN FIN").font(.system(size: 8, weight: .black, design: .monospaced))
                         }.foregroundColor(isInfiniteActive ? .white : .purple)
-                    }.frame(width: 80, height: 48)
+                    }
+                    .frame(width: 70, height: 48)
                 }
             }
-        }.padding(.horizontal)
+        }
+        .padding(.horizontal)
     }
 
     private func editorFooter(id: Int) -> some View {

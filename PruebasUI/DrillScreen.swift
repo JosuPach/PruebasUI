@@ -295,7 +295,7 @@ struct DrillScreen: View {
                     VStack(spacing: 12) {
                         HStack(spacing: 10) {
                             Button(action: {
-                                communicator.sendCommand("[Z]")
+                                communicator.sendCommand("[X]")
                                 isDataLoaded = false
                             }) {
                                 VStack(spacing: 4) {
@@ -331,7 +331,7 @@ struct DrillScreen: View {
                             if !isRunning {
                                 communicator.sendCommand("[GO]")
                             } else {
-                                communicator.sendCommand("[P]")
+                                communicator.sendCommand("[Z]")
                             }
                             isRunning.toggle()
                         }) {

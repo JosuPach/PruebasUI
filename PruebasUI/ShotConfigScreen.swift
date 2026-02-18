@@ -42,12 +42,26 @@ struct ShotConfigScreen: View {
     }
 
     // MARK: - Funciones de Escalado
-    private func scaleTo99(_ value: Double) -> Int { Int(((max(0, min(255, value)) * 99.0) / 255.0).rounded()) }
-    private func scaleTo20(_ value: Double) -> Int { Int(((value * 20.0) / 255.0).rounded()) }
-    private func scaleToCT(_ value: Double) -> Int { Int(((value * 6000.0 / 255.0) - 3000.0).rounded()) }
+    private func scaleToSigned20(_ value: Double) -> Int {
+        Int(((value * 40.0) / 255.0).rounded()) - 20
+    }
+
+    private func scaleTo99(_ value: Double) -> Int {
+        Int(((max(0, min(255, value)) * 99.0) / 255.0).rounded())
+    }
+
+    private func scaleToCT(_ value: Double) -> Int {
+        Int(((value * 6000.0 / 255.0) - 3000.0).rounded())
+    }
+
+    // Función para mostrar el texto con el signo "+" si es positivo
+    private func formatSignedDisplay(_ value: Double) -> String {
+        let scaled = scaleToSigned20(value)
+        return scaled > 0 ? "+\(scaled)" : "\(scaled)"
+    }
 
     private func generateSHCommand() -> String {
-        return "[SH\(scaleTo99(Double(cValues[selectedCol]))),\(scaleTo99(Double(dValues[selectedRow]))),\(scaleTo99(speedATemp)),\(scaleTo99(speedBTemp)),\(scaleTo99(delayTemp)),\(scaleTo20(targetFTemp)),\(scaleTo20(targetGTemp)),\(scaleToCT(targetHTemp))]"
+        return "[SH\(scaleTo99(Double(cValues[selectedCol]))),\(scaleTo99(Double(dValues[selectedRow]))),\(scaleTo99(speedATemp)),\(scaleTo99(speedBTemp)),\(scaleTo99(delayTemp)),\(scaleToSigned20(targetFTemp)),\(scaleToSigned20(targetGTemp)),\(scaleToCT(targetHTemp))]"
     }
 
     private var isModified: Bool {
@@ -112,8 +126,8 @@ struct ShotConfigScreen: View {
                         CompactParameterSlider(label: "RUEDA B", value: $speedBTemp, range: 0...255, icon: "arrow.down.circle", displayValue: "\(scaleTo99(speedBTemp))", color: .cyan)
                         CompactParameterSlider(label: "CADENCIA", value: $delayTemp, range: 0...255, icon: "clock.fill", displayValue: "\(scaleTo99(delayTemp))", color: .green)
                         CompactParameterSlider(label: "GIRO CT", value: $targetHTemp, range: 0...255, icon: "move.3d", displayValue: "\(scaleToCT(targetHTemp))", color: .orange)
-                        CompactParameterSlider(label: "CART. X", value: $targetFTemp, range: 0...255, icon: "arrow.left.and.right", displayValue: "\(scaleTo20(targetFTemp))", color: .white)
-                        CompactParameterSlider(label: "CART. Y", value: $targetGTemp, range: 0...255, icon: "arrow.up.and.down", displayValue: "\(scaleTo20(targetGTemp))", color: .white)
+                        CompactParameterSlider(label: "CART. X", value: $targetFTemp, range: 0...255, icon: "arrow.left.and.right", displayValue: "\(scaleToSigned20(targetFTemp))", color: .white)
+                        CompactParameterSlider(label: "CART. Y", value: $targetGTemp, range: 0...255, icon: "arrow.up.and.down", displayValue: "\(scaleToSigned20(targetGTemp))", color: .white)
                     }
                     .padding(20)
                     .background(Color.white.opacity(0.04))
@@ -211,7 +225,7 @@ struct ShotConfigScreen: View {
     private var actionButtons: some View {
         HStack(spacing: 15) {
             Button(action: {
-                communicator.sendCommand("[DR]") // Regresar a modo Drill al cancelar
+                communicator.sendCommand("[MD]") // Regresar a modo Drill al cancelar
                 onCancel()
                 dismiss()
             }) {
@@ -299,30 +313,64 @@ struct CustomModernBar: View {
 
 // MARK: - Componentes de Estética Visual
 
+// MARK: - Forma de la Cancha (Base)
 struct TennisCourtShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.width * 0.25, y: 0))
-        path.addLine(to: CGPoint(x: rect.width * 0.75, y: 0))
-        path.addLine(to: CGPoint(x: rect.width * 0.98, y: rect.height))
-        path.addLine(to: CGPoint(x: rect.width * 0.02, y: rect.height))
+        // Definimos los puntos base para la perspectiva
+        let topW = rect.width * 0.25
+        let botW = rect.width * 0.02
+        
+        path.move(to: CGPoint(x: topW, y: 0))
+        path.addLine(to: CGPoint(x: rect.width - topW, y: 0))
+        path.addLine(to: CGPoint(x: rect.width - botW, y: rect.height))
+        path.addLine(to: CGPoint(x: botW, y: rect.height))
         path.closeSubpath()
         return path
     }
 }
 
+// MARK: - Dibujo de Líneas Profesionales
 struct TennisCourtLines: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.width * 0.25, y: 0))
-        path.addLine(to: CGPoint(x: rect.width * 0.75, y: 0))
-        path.addLine(to: CGPoint(x: rect.width * 0.98, y: rect.height))
-        path.addLine(to: CGPoint(x: rect.width * 0.02, y: rect.height))
-        path.closeSubpath()
-        path.move(to: CGPoint(x: rect.width * 0.5, y: 0))
+        
+        // --- PROPORCIONES CON PERSPECTIVA ---
+        let topSideMargin = rect.width * 0.25
+        let botSideMargin = rect.width * 0.02
+        
+        let topDoublePass = rect.width * 0.05
+        let botDoublePass = rect.width * 0.08
+
+        // 1. Perímetro exterior
+        path.addPath(TennisCourtShape().path(in: rect))
+        
+        // 2. Líneas de Dobles (Pasillos laterales)
+        path.move(to: CGPoint(x: topSideMargin + topDoublePass, y: 0))
+        path.addLine(to: CGPoint(x: botSideMargin + botDoublePass, y: rect.height))
+        
+        path.move(to: CGPoint(x: rect.width - topSideMargin - topDoublePass, y: 0))
+        path.addLine(to: CGPoint(x: rect.width - botSideMargin - botDoublePass, y: rect.height))
+        
+        // 3. Línea de Servicio (Horizontal) - AHORA EN LA PARTE INFERIOR
+        // La movemos al 55% del alto para que el rectángulo grande quede arriba
+        let serviceLineY = rect.height * 0.55
+        
+        // Calculamos los extremos de la línea horizontal con la perspectiva actual
+        let sLeft = botSideMargin + botDoublePass + 10
+        let sRight = rect.width - botSideMargin - botDoublePass - 10
+        
+        path.move(to: CGPoint(x: sLeft, y: serviceLineY))
+        path.addLine(to: CGPoint(x: sRight, y: serviceLineY))
+        
+        // 4. Línea Central de Saque (Vertical) - CONECTA LA BASE CON LA LÍNEA DE SERVICIO
+        path.move(to: CGPoint(x: rect.width * 0.5, y: serviceLineY))
         path.addLine(to: CGPoint(x: rect.width * 0.5, y: rect.height))
-        path.move(to: CGPoint(x: rect.width * 0.15, y: rect.height * 0.45))
-        path.addLine(to: CGPoint(x: rect.width * 0.85, y: rect.height * 0.45))
+        
+        // 5. Marca Central (Pequeña línea en el fondo superior)
+        path.move(to: CGPoint(x: rect.width * 0.5, y: 0))
+        path.addLine(to: CGPoint(x: rect.width * 0.5, y: 10))
+        
         return path
     }
 }
