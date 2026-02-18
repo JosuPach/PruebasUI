@@ -15,36 +15,92 @@ extension UINavigationController: UIGestureRecognizerDelegate {
 
 // MARK: - Mini Preview de la Cancha
 struct MiniCourtPreview: View {
-    let targetC: Int
-    let targetD: Int
+    let targetC: Double
+    let targetD: Double
     let spin: Int
     
+    // Configuración de límites para que no se salga
+    private let ballSize: CGFloat = 10
+    private let padding: CGFloat = 6 // Margen mínimo desde el borde
+    
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                RoundedRectangle(cornerRadius: 4).fill(Color.blue.opacity(0.6))
-                Group {
-                    Rectangle().fill(Color.white.opacity(0.8)).frame(width: 1.5)
-                    Rectangle().fill(Color.white.opacity(0.8)).frame(height: 1.5).offset(y: -geo.size.height * 0.2)
-                    Rectangle().fill(Color.white.opacity(0.8)).frame(height: 1.5).offset(y: geo.size.height * 0.2)
+        ZStack {
+            // 1. Fondo con gradiente
+            RoundedRectangle(cornerRadius: 6)
+                .fill(LinearGradient(
+                    gradient: Gradient(colors: [Color.black, Color(red: 0.1, green: 0.15, blue: 0.25)]),
+                    startPoint: .top, endPoint: .bottom
+                ))
+            
+            // 2. Malla de la cancha
+            VStack(spacing: 0) {
+                ForEach(0..<4) { _ in
+                    Divider().background(Color.white.opacity(0.05))
+                    Spacer()
                 }
-                let ballSize: CGFloat = 6
-                let margin: CGFloat = ballSize / 2 + 2
-                let posX = margin + (CGFloat(targetC) / 255.0 * (geo.size.width - margin * 2))
-                let posY = margin + (CGFloat(targetD) / 255.0 * (geo.size.height - margin * 2))
-                
-                if spin != 0 {
-                    Circle().stroke(spin > 0 ? Color.green.opacity(0.7) : Color.red.opacity(0.7), lineWidth: 2)
-                        .frame(width: ballSize + 6, height: ballSize + 6).position(x: posX, y: posY)
-                }
-                Circle().fill(Color.yellow).frame(width: ballSize, height: ballSize)
-                    .shadow(color: spin > 0 ? .green : (spin < 0 ? .red : .black.opacity(0.5)), radius: 3)
-                    .position(x: posX, y: posY)
             }
-        }.frame(width: 80, height: 50).overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.3), lineWidth: 1)).clipped()
+            HStack(spacing: 0) {
+                ForEach(0..<3) { _ in
+                    Divider().background(Color.white.opacity(0.05))
+                    Spacer()
+                }
+            }
+
+            // 3. Líneas de referencia
+            Canvas { context, size in
+                let w = size.width
+                let h = size.height
+                context.stroke(Path { p in
+                    p.move(to: CGPoint(x: 0, y: h * 0.15))
+                    p.addLine(to: CGPoint(x: w, y: h * 0.15))
+                }, with: .color(.white.opacity(0.4)), lineWidth: 1.5)
+            }
+            
+            // 4. PUNTO DE IMPACTO (La Pelota) con ajuste de límites
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+                
+                // Mapeo con zona de seguridad:
+                // En lugar de usar de 0 a w, usamos de 'padding' a 'w - padding'
+                let xPos = padding + (CGFloat(targetC / 255.0) * (w - (padding * 2)))
+                let yPos = padding + (CGFloat(targetD / 255.0) * (h - (padding * 2)))
+                
+                ZStack {
+                    // Resplandor (Glow)
+                    Circle()
+                        .fill(spinColor.opacity(0.3))
+                        .frame(width: 20, height: 20)
+                        .blur(radius: 4)
+                    
+                    // Punto central
+                    Circle()
+                        .fill(spinColor)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                        .frame(width: ballSize, height: ballSize)
+                    
+                    // Icono de dirección de Spin
+                    Image(systemName: spin > 0 ? "chevron.up" : (spin < 0 ? "chevron.down" : "circle"))
+                        .font(.system(size: 6, weight: .black))
+                        .foregroundColor(.black)
+                }
+                .position(x: xPos, y: yPos)
+            }
+        }
+        .frame(width: 65, height: 85)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6)) // Asegura que nada sobresalga
+    }
+    
+    var spinColor: Color {
+        if spin > 10 { return .green }      // Topspin significativo
+        if spin < -10 { return .red }       // Backspin significativo
+        return Color.cyan                   // Flat / Neutral
     }
 }
-
 // MARK: - LoopPath Animado
 struct LoopPath: Shape {
     let count: Int
@@ -73,22 +129,73 @@ struct LoopPath: Shape {
 // MARK: - InstructionsView
 struct InstructionsView: View {
     @Binding var isPresented: Bool
+    
     var body: some View {
         ZStack {
-            Color.black.opacity(0.85).ignoresSafeArea().onTapGesture { isPresented = false }
-            VStack(spacing: 20) {
-                Text("AYUDA DE SECUENCIAS").font(.system(.headline, design: .monospaced)).foregroundColor(.dragonBotPrimary)
-                VStack(alignment: .leading, spacing: 15) {
-                    Label("Añade tiros para crear una rutina.", systemImage: "plus.circle")
-                    Label("Configura bucles para repetir la lista.", systemImage: "arrow.3.trianglepath")
-                    Label("Usa el Modo Drill para disparos aleatorios.", systemImage: "target")
-                }.font(.footnote).foregroundColor(.white)
-                Button("ENTENDIDO") { withAnimation { isPresented = false } }.padding().frame(maxWidth: .infinity).background(Color.dragonBotPrimary).foregroundColor(.black).cornerRadius(10)
-            }.padding(30).background(Color(red: 0.1, green: 0.12, blue: 0.18)).cornerRadius(20).padding(40)
+            Color.black.opacity(0.85)
+                .ignoresSafeArea()
+                .onTapGesture { isPresented = false }
+            
+            VStack(spacing: 25) {
+                // Título
+                Text("GUIDE")
+                    .font(.system(size: 16, weight: .black, design: .monospaced))
+                    .foregroundColor(.dragonBotPrimary)
+                
+                VStack(alignment: .leading, spacing: 20) {
+                    // SECCIÓN: FLUJO DE CARGA
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("PASO 1: SINCRONIZACIÓN")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.dragonBotSecondary)
+                        
+                        Label("Usa 'ENVIAR SECUENCIA' para cargar los tiros. El botón de inicio se desbloqueará tras el envío.", systemImage: "arrow.up.doc.fill")
+                    }
+                    
+                    // SECCIÓN: EJECUCIÓN
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("PASO 2: EJECUCIÓN")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.dragonBotPrimary)
+                        
+                        Label("'INICIAR' activa la rutina cargada. 'DETENER' apaga todos los tiros y motores inmediatamente.", systemImage: "play.pause.fill")
+                    }
+                    
+                    // SECCIÓN: EDICIÓN Y BORRADO
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("CONTROLES TÉCNICOS")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.gray)
+                        
+                        Label("EDITAR (en la tarjeta): Modifica los parámetros de ese tiro individual.", systemImage: "slider.horizontal.3")
+                        Label("RESET (Z): Borra la lista completa de tiros para reiniciar la secuencia.", systemImage: "trash.fill")
+                    }
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+                
+                // Botón de cierre (Único botón interactivo)
+                Button(action: { withAnimation { isPresented = false } }) {
+                    Text("ENTENDIDO")
+                        .font(.system(size: 14, weight: .black, design: .monospaced))
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.dragonBotPrimary)
+                        .foregroundColor(.black)
+                        .cornerRadius(10)
+                }
+            }
+            .padding(30)
+            .background(Color(red: 0.1, green: 0.12, blue: 0.18))
+            .cornerRadius(20)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.dragonBotPrimary.opacity(0.3), lineWidth: 1)
+            )
+            .padding(40)
         }
     }
 }
-
 // MARK: - DrillShotCard
 struct DrillShotCard: View {
     let cfg: ShotConfig
@@ -102,7 +209,12 @@ struct DrillShotCard: View {
                 Text("\(cfg.shotNumber)").font(.system(size: 16, weight: .black, design: .monospaced)).foregroundColor(.black)
             }.frame(width: 44)
             HStack(spacing: 15) {
-                MiniCourtPreview(targetC: cfg.targetC, targetD: cfg.targetD, spin: Int(cfg.targetH))
+                // En DrillShotCard, dentro de la llamada a MiniCourtPreview:
+                MiniCourtPreview(
+                    targetC: Double(cfg.targetC),
+                    targetD: Double(cfg.targetD),
+                    spin: Int(cfg.targetH) - 128 // Si 128 es el centro, esto dará negativos y positivos
+                )
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("TIRO \(cfg.shotNumber)").font(.system(size: 10, weight: .black)).foregroundColor(isCurrent ? .white : .gray)
@@ -125,12 +237,19 @@ struct DrillShotCard: View {
                         Button(action: onEdit) { Text("EDITAR").font(.system(size: 9, weight: .black)).padding(.horizontal, 10).padding(.vertical, 4).background(isCurrent ? Color.white.opacity(0.2) : Color.dragonBotPrimary).foregroundColor(isCurrent ? .white : .black).cornerRadius(4) }.disabled(isCurrent)
                     }
                 }
-            }.padding(12).background(isCurrent ? Color.dragonBotPrimary.opacity(0.2) : Color.white.opacity(0.08)).cornerRadius(15).overlay(RoundedRectangle(cornerRadius: 15).stroke(isCurrent ? Color.dragonBotPrimary : Color.white.opacity(0.1), lineWidth: 1))
+            }// Dentro de DrillShotCard, en el contenedor de la derecha
+                .padding(12)
+                .background(
+                    isCurrent ?
+                    Color.dragonBotPrimary.opacity(0.15) :
+                    Color.white.opacity(0.05)
+                )
+                .cornerRadius(15)
+                .shadow(color: isCurrent ? Color.dragonBotPrimary.opacity(0.2) : .clear, radius: 8)
         }.padding(.horizontal)
     }
 }
 
-// MARK: - DrillScreen Principal
 // MARK: - DrillScreen Principal
 struct DrillScreen: View {
     @ObservedObject var communicator: BLECommunicator

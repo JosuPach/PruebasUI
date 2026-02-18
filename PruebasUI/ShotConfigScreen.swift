@@ -152,7 +152,7 @@ struct ShotConfigScreen: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("DRAGONBOT OS").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.cyan)
+                Text("DRAGONBOT").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.cyan)
                 Text("EDITAR TIRO").font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(.white)
             }
             

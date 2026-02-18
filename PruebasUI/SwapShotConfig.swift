@@ -67,7 +67,7 @@ struct SwapConfigScreen: View {
                         executionButtons
                         
                         VStack(alignment: .leading, spacing: 15) {
-                            Text("CANALES CONFIGURADOS")
+                            Text("TIROS CONFIGURADOS")
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                                 .foregroundColor(.gray)
                                 .padding(.horizontal)
@@ -113,8 +113,8 @@ struct SwapConfigScreen: View {
             Spacer()
             
             VStack(alignment: .trailing, spacing: 2) {
-                Text("SWAP ENGINE").font(.system(size: 10, weight: .black, design: .monospaced)).foregroundColor(.white)
-                Text("v2.4.0").font(.system(size: 8, design: .monospaced)).foregroundColor(.gray)
+                Text("").font(.system(size: 10, weight: .black, design: .monospaced)).foregroundColor(.white)
+                Text("").font(.system(size: 8, design: .monospaced)).foregroundColor(.gray)
             }
         }
         .padding(.horizontal)
@@ -196,7 +196,7 @@ struct SwapConfigScreen: View {
                             parameterSlider(label: "CADENCIA (FEED)", value: $tempConfig.feed, id: "feed", range: 0...255)
                         }
                         
-                        parameterGroup(title: "AJUSTES DE GIRO") {
+                        parameterGroup(title: "GIRO CARTRACK") {
                             parameterSlider(label: "GIRO TOTAL (CT)", value: $tempConfig.ct, id: "ct", range: 0...255)
                         }
                         
@@ -205,7 +205,7 @@ struct SwapConfigScreen: View {
                             parameterSlider(label: "EJE Y (LARGO)", value: $tempConfig.y, id: "y", range: 0...255)
                         }
                         
-                        parameterGroup(title: "CURVATURA PERSONALIZADA (CX/CY)") {
+                        parameterGroup(title: "DIRECCIÓN CARTRACK (CX/CY)") {
                             // El rango del slider sigue siendo 0...255 para mantener la resolución,
                             // la estructura se encarga de convertirlo a -20...20
                             parameterSlider(label: "CAR EJE X (CX)", value: $tempConfig.cx, id: "cx", range: 0...255)
@@ -222,7 +222,7 @@ struct SwapConfigScreen: View {
     private func editorHeader(id: Int) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("CONFIGURACIÓN CANAL 0\(id)").font(.system(size: 14, weight: .black, design: .monospaced)).foregroundColor(.cyan)
+                Text("CONFIGURACIÓN TIRO 0\(id)").font(.system(size: 14, weight: .black, design: .monospaced)).foregroundColor(.cyan)
                 Text("MODO SWAP").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.gray)
             }
             Spacer()

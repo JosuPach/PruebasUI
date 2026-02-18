@@ -89,7 +89,7 @@ struct NavButtonContent: View {
                 .padding(.leading, 12)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(label).font(.system(size: 11, weight: .black, design: .monospaced)).foregroundColor(.white)
-                    Text("INICIAR SECUENCIA").font(.system(size: 7, design: .monospaced)).foregroundColor(color.opacity(0.6))
+                    Text("START SEQUENCE").font(.system(size: 7, design: .monospaced)).foregroundColor(color.opacity(0.6))
                 }
                 Spacer()
                 Image(systemName: "chevron.right.square.fill").font(.system(size: 14)).foregroundColor(color.opacity(0.5)).padding(.trailing, 12)
@@ -148,7 +148,7 @@ struct MainContentScreen: View {
                 // Header
                 VStack(spacing: 5) {
                     Text("DRAGONBOT").font(.system(size: 32, weight: .black, design: .monospaced)).foregroundColor(.white).tracking(6)
-                    Text("TACTICAL INTERFACE V1.1").font(.system(size: 8, design: .monospaced)).foregroundColor(.white.opacity(0.4))
+                    Text("").font(.system(size: 8, design: .monospaced)).foregroundColor(.white.opacity(0.4))
                 }.padding(.top, 10)
                 
                 ConnectionWarningView(communicator: communicator, onConnectClick: { showDeviceSelectionDialog = true })
@@ -156,7 +156,7 @@ struct MainContentScreen: View {
                 // 1. MODOS DE OPERACIÓN
                 // 1. MODOS DE OPERACIÓN
                 // 1. MODOS DE OPERACIÓN
-                ControlSection(title: "MODOS TÁCTICOS Y NAVEGACIÓN") {
+                ControlSection(title: "MODES") {
                     VStack(spacing: 12) {
                         
                         // MODO MANUAL: Ahora abre el Joystick (FullScreen)
@@ -174,7 +174,7 @@ struct MainContentScreen: View {
                         // MODO IA: Mantiene su popup de Sistema IA
                         Button(action: { showIAPopup = true }) {
                             NavButtonContentWithGraphic(
-                                label: "SISTEMA IA",
+                                label: "IA SYSTEM",
                                 color: .dragonBotSecondary,
                                 graphic: IAIconView(color: .dragonBotSecondary)
                             )
@@ -186,7 +186,7 @@ struct MainContentScreen: View {
                             showConfigDialog = true     // <--- Invertido: Ahora abre parámetros remotos
                         }) {
                             NavButtonContentWithGraphic(
-                                label: "CONTROL REMOTO",
+                                label: "REMOTE CONTROL",
                                 color: .orange,
                                 graphic: RemoteIconView(color: .orange)
                             )
@@ -195,7 +195,7 @@ struct MainContentScreen: View {
                     .padding(.horizontal, 5)
                 }
                 // 2. PROGRAMAS TÁCTICOS (AHORA PRIMERO)
-                ControlSection(title: "PROGRAMAS TÁCTICOS") {
+                ControlSection(title: "RUTINES") {
                     VStack(spacing: 12) {
                         Button(action: {
                             checkHelp(key: "DRILLS", wasSeen: hasSeenDrills) {
@@ -204,7 +204,7 @@ struct MainContentScreen: View {
                             }
                         }) {
                             NavButtonContentWithGraphic(
-                                label: "EDITOR DE SECUENCIAS",
+                                label: "DRILL MODE",
                                 color: .dragonBotPrimary,
                                 graphic: BuiltInIconView(color: .dragonBotPrimary)
                             )
@@ -217,7 +217,7 @@ struct MainContentScreen: View {
                             }
                         }) {
                             NavButtonContentWithGraphic(
-                                label: "SECUENCIAS ÚNICAS",
+                                label: "SWAP MODE",
                                 color: .dragonBotSecondary,
                                 graphic: WarmUpIconView(color: .dragonBotSecondary)
                             )
@@ -226,7 +226,7 @@ struct MainContentScreen: View {
                 }
 
                 // 3. CONTROL CARTRACK (AHORA SEGUNDO)
-                ControlSection(title: "SISTEMA CARTRACK") {
+                ControlSection(title: "CARTRACK REMOTE CONTROL") {
                     Button(action: {
                         checkHelp(key: "JOYSTICK", wasSeen: hasSeenJoystick) {
                             hasSeenJoystick = true
@@ -234,7 +234,7 @@ struct MainContentScreen: View {
                         }
                     }) {
                         NavButtonContent(
-                            label: "CONTROL CARTRACK",
+                            label: "CARTRACK CONTROL",
                             icon: "gamecontroller.fill",
                             color: .dragonBotSecondary
                         )
@@ -315,7 +315,7 @@ struct ConnectionWarningView: View {
             Text(isConnected ? "ONLINE" : "OFFLINE").font(.system(size: 9, weight: .black, design: .monospaced)).foregroundColor(activeColor)
             Spacer()
             if !isConnected {
-                Button("CONECTAR", action: onConnectClick)
+                Button("CONNECT", action: onConnectClick)
                     .font(.system(size: 8, design: .monospaced))
                     .padding(.horizontal, 8).padding(.vertical, 4).background(activeColor.opacity(0.2)).foregroundColor(activeColor).cornerRadius(4)
             }
@@ -360,7 +360,7 @@ struct HelpPopupView: View {
                     }
                     
                     Button(action: onDismiss) {
-                        Text("ENTENDIDO")
+                        Text("OK")
                             .font(.system(size: 11, weight: .black, design: .monospaced))
                             .padding(.horizontal, 30)
                             .padding(.vertical, 10)
@@ -418,10 +418,10 @@ struct ModeConfigurationDialog: View {
                 // Cabecera del Panel
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("CONTROL DE PARÁMETROS")
+                        Text("PARAMETERS")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(.dragonBotPrimary)
-                        Text("MODO: \(String(describing: mode))")
+                        Text("MODE: \(String(describing: mode))")
                             .font(.system(size: 8, design: .monospaced))
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -468,10 +468,10 @@ struct JoystickRemoteDialog: View {
             VStack(spacing: 0) {
                 HStack {
                     VStack(alignment: .leading) {
-                        Text("CONTROL REMOTO DE CARTRACK")
+                        Text("REMOTE CARTRACK CONTROL")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(.dragonBotSecondary)
-                        Text("SISTEMA DE NAVEGACIÓN ACTIVO")
+                        Text("SYSTEM ACTIVE")
                             .font(.system(size: 8, design: .monospaced))
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -489,7 +489,7 @@ struct JoystickRemoteDialog: View {
                 
                 HStack {
                     VStack {
-                        Text("MOVIMIENTO").font(.system(size: 10, design: .monospaced)).foregroundColor(.dragonBotPrimary)
+                        Text("MOVEMENT").font(.system(size: 10, design: .monospaced)).foregroundColor(.dragonBotPrimary)
                         JoystickView(label: "L") { x, y in
                             let cmd = "[LX\(Int(x * 127 + 127))Y\(Int(y * 127 + 127))]"
                             communicator.sendCommand(cmd)
@@ -502,7 +502,7 @@ struct JoystickRemoteDialog: View {
                     Spacer()
                     
                     VStack {
-                        Text("CÁMARA").font(.system(size: 10, design: .monospaced)).foregroundColor(.dragonBotSecondary)
+                        Text("CAMERA").font(.system(size: 10, design: .monospaced)).foregroundColor(.dragonBotSecondary)
                         JoystickView(label: "R") { x, y in
                             let cmd = "[RX\(Int(x * 127 + 127))Y\(Int(y * 127 + 127))]"
                             communicator.sendCommand(cmd)
@@ -512,16 +512,16 @@ struct JoystickRemoteDialog: View {
                 .padding(40)
                 
                 HStack(spacing: 20) {
-                    Button("DETENER") {
+                    Button("STOP") {
                         communicator.sendCommand("[O000]")
                         currentVelocity = .zero
                     }
                     .buttonStyle(TerminalButtonStyle(color: .dragonBotError))
                     
-                    Button("CENTRO") { communicator.sendCommand("[C127]") }
+                    Button("CENTER") { communicator.sendCommand("[C127]") }
                     .buttonStyle(TerminalButtonStyle(color: .white))
                     
-                    Button("MAX POTENCIA") { communicator.sendCommand("[E255]") }
+                    Button("MAX SPEED") { communicator.sendCommand("[E255]") }
                     .buttonStyle(TerminalButtonStyle(color: .dragonBotPrimary))
                 }
                 .padding(.horizontal, 40)
@@ -589,7 +589,7 @@ struct IAConfigurationDialog: View {
             
             VStack(spacing: 30) {
                 HStack {
-                    Text("MODO IA")
+                    Text("AI MODE")
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                         .foregroundColor(.dragonBotSecondary)
                     Spacer()
@@ -610,7 +610,7 @@ struct IAConfigurationDialog: View {
                     }) {
                         HStack {
                             Image(systemName: "bolt.shield.fill")
-                            Text("ACTIVAR IA")
+                            Text("POWER ON AI")
                         }
                         .font(.system(size: 16, weight: .black, design: .monospaced))
                         .foregroundColor(.dragonBotSecondary)
@@ -627,7 +627,7 @@ struct IAConfigurationDialog: View {
                     }) {
                         HStack {
                             Image(systemName: "power")
-                            Text("APAGAR IA")
+                            Text("SHUTDOWN AI")
                         }
                         .font(.system(size: 16, weight: .black, design: .monospaced))
                         .foregroundColor(.dragonBotError)
@@ -641,7 +641,7 @@ struct IAConfigurationDialog: View {
                 
                 Spacer()
                 
-                Text("ADVERTENCIA: EL APAGADO DETIENE TODOS LOS MOTORES INMEDIATAMENTE")
+                Text("WARNING: STOP SHUTDOWN MOTORS")
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
                     .padding(.bottom, 20)
@@ -669,17 +669,17 @@ struct ManualSlidersList: View {
             VStack(spacing: 30) {
                 // Ahora solo queda el botón de Modo Remoto aquí
                 HStack(spacing: 15) {
-                    Button("ESTABLECER MODO REMOTO") { onSave("[R000]") }
+                    Button("START REMOTE MODE") { onSave("[R000]") }
                         .buttonStyle(TerminalButtonStyle(color: .dragonBotSecondary))
                 }
                 .padding(.top, 10)
                 
                 VStack(spacing: 35) {
-                    SliderItem(label: "ELEVACIÓN SUPERIOR (A)", value: $vA, color: .dragonBotPrimary) { send(prefix: "A", val: vA) }
-                    SliderItem(label: "ELEVACIÓN INFERIOR (B)", value: $vB, color: .dragonBotPrimary) { send(prefix: "B", val: vB) }
-                    SliderItem(label: "POTENCIA TURBINA 1 (C)", value: $vC, color: .dragonBotSecondary) { send(prefix: "C", val: vC) }
-                    SliderItem(label: "POTENCIA TURBINA 2 (D)", value: $vD, color: .dragonBotSecondary) { send(prefix: "D", val: vD) }
-                    SliderItem(label: "FRECUENCIA DISPARO (E)", value: $vE, color: .white) { send(prefix: "E", val: vE) }
+                    SliderItem(label: "UP (A)", value: $vA, color: .dragonBotPrimary) { send(prefix: "A", val: vA) }
+                    SliderItem(label: "DOWN (B)", value: $vB, color: .dragonBotPrimary) { send(prefix: "B", val: vB) }
+                    SliderItem(label: "WHEEL 1 SPEED(C)", value: $vC, color: .dragonBotSecondary) { send(prefix: "C", val: vC) }
+                    SliderItem(label: "WHEEL 2 SPEED(D)", value: $vD, color: .dragonBotSecondary) { send(prefix: "D", val: vD) }
+                    SliderItem(label: "SHOT FREQUENCY (E)", value: $vE, color: .white) { send(prefix: "E", val: vE) }
                 }
                 .padding(.bottom, 40)
             }
@@ -927,7 +927,7 @@ struct NavButtonContentWithGraphic<Graphic: View>: View {
                 Text(label)
                     .font(.system(size: 14, weight: .black, design: .monospaced))
                     .foregroundColor(.white)
-                Text("SISTEMA TÁCTICO")
+                Text("SYSTEM")
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundColor(color.opacity(0.7))
             }

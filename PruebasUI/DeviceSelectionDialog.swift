@@ -1,167 +1,222 @@
 import SwiftUI
 
 struct DeviceSelectionDialog: View {
-    
     @ObservedObject var communicator: BLECommunicator
     var onDeviceSelected: (DeviceData) -> Void
     var onDismiss: () -> Void
     
-    // ⭐️ Nuevo: Duración del escaneo (ej. 10 segundos)
     private let scanDuration: TimeInterval = 10.0
-    
     @State private var scanTimer: Timer? = nil
-
-    // MARK: - Lógica del Escaneo (Replicando DisposableEffect)
+    @State private var scanRotation: Double = 0
     
+    // MARK: - Lógica de Escaneo
     private func startScanning() {
-        // Asegurarse de detener cualquier escaneo y temporizador anterior.
         communicator.stopScan()
         scanTimer?.invalidate()
-        
-        // 1. Iniciar el escaneo
         communicator.startScan()
         
-        // 2. Programar el temporizador para detener el escaneo
+        // Animación de radar
+        withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+            scanRotation = 360
+        }
+        
         scanTimer = Timer.scheduledTimer(withTimeInterval: scanDuration, repeats: false) { _ in
-            communicator.stopScan()
-            print("Escaneo detenido automáticamente después de \(scanDuration) segundos.")
+            stopScanning()
         }
     }
     
     private func stopScanning() {
         scanTimer?.invalidate()
         scanTimer = nil
+        scanRotation = 0
         communicator.stopScan()
     }
     
+    // MARK: - Body Principal
     var body: some View {
+        VStack(spacing: 0) {
+            headerSection
+            
+            deviceListSection
+            
+            controlPanelSection
+        }
+        .background(Color(red: 0.05, green: 0.07, blue: 0.12))
+        .cornerRadius(20)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(DragonBotTheme.primary.opacity(0.3), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.5), radius: 20)
+        .padding(25)
+        .onAppear { startScanning() }
+        .onDisappear { stopScanning() }
+    }
+    
+    // MARK: - Sub-vistas (Para evitar error de compilación)
+    
+    private var headerSection: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("SISTEMA DE ENLACE")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(DragonBotTheme.primary.opacity(0.7))
+                Text("BUSCANDO HARDWARE")
+                    .font(.system(size: 18, weight: .black, design: .monospaced))
+                    .foregroundColor(.white)
+            }
+            Spacer()
+            
+            // Indicador de Radar
+            ZStack {
+                Circle()
+                    .stroke(DragonBotTheme.primary.opacity(0.2), lineWidth: 1)
+                Circle()
+                    .trim(from: 0, to: 0.3)
+                    .stroke(DragonBotTheme.primary, lineWidth: 2)
+                    .rotationEffect(.degrees(scanRotation))
+            }
+            .frame(width: 30, height: 30)
+        }
+        .padding(20)
+        .background(Color.black.opacity(0.3))
+    }
+    
+    private var deviceListSection: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                if communicator.discoveredDevices.isEmpty {
+                    emptyStateView
+                } else {
+                    ForEach(communicator.discoveredDevices) { device in
+                        DeviceRow(device: device)
+                            .onTapGesture {
+                                stopScanning()
+                                onDeviceSelected(device)
+                                onDismiss()
+                            }
+                    }
+                }
+            }
+            .padding(20)
+        }
+        .frame(maxHeight: 300)
+        .background(Color.black.opacity(0.1))
+    }
+    
+    private var emptyStateView: some View {
         VStack(spacing: 15) {
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.system(size: 30))
+                .foregroundColor(DragonBotTheme.primary.opacity(0.3))
+            Text(communicator.isScanning ? "ESCANEO EN CURSO..." : "NO SE DETECTARON DISPOSITIVOS")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(.gray)
+        }
+        .padding(.top, 40)
+    }
+    
+    private var controlPanelSection: some View {
+        VStack(spacing: 12) {
+            Divider().background(DragonBotTheme.primary.opacity(0.2))
             
-            // --- Título del Diálogo ---
-            Text("Selecciona tu DragonBot")
-                .font(.title2.bold())
-                .foregroundColor(DragonBotTheme.primary)
-                .padding(.bottom, 5)
-
-            // --- Estado del Escaneo y Spinner ---
-            HStack {
-                Text(communicator.isScanning ? "Buscando dispositivos cercanos..." : "Escaneo Detenido.")
-                    .font(.callout)
-                    .foregroundColor(DragonBotTheme.secondary)
-                
-                if communicator.isScanning {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: DragonBotTheme.secondary))
-                }
-            }
-            
-            // --- Lista de Dispositivos Encontrados ---
-            ScrollView {
-                VStack(spacing: 8) {
-                    if communicator.discoveredDevices.isEmpty && !communicator.isScanning {
-                        Text("No se encontraron dispositivos.")
-                            .foregroundColor(DragonBotTheme.error)
-                            .padding()
-                    } else {
-                        ForEach(communicator.discoveredDevices) { device in
-                            DeviceRow(device: device)
-                                .onTapGesture {
-                                    stopScanning() // Detener escaneo antes de conectar
-                                    onDeviceSelected(device)
-                                    onDismiss()
-                                }
-                        }
+            HStack(spacing: 12) {
+                // Botón REESCANEAR / DETENER
+                Button(action: {
+                    if communicator.isScanning { stopScanning() }
+                    else { startScanning() }
+                }) {
+                    HStack {
+                        Image(systemName: communicator.isScanning ? "xmark.circle" : "arrow.clockwise")
+                        Text(communicator.isScanning ? "DETENER" : "REESCANEAR")
                     }
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .foregroundColor(communicator.isScanning ? .red : DragonBotTheme.secondary)
+                    .frame(maxWidth: .infinity) // Ocupa el espacio disponible
+                    .frame(height: 45)         // Altura fija para evitar el error de minHeight
+                    .background(communicator.isScanning ? Color.red.opacity(0.2) : DragonBotTheme.secondary.opacity(0.2))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(communicator.isScanning ? Color.red.opacity(0.4) : DragonBotTheme.secondary.opacity(0.4), lineWidth: 1)
+                    )
                 }
-                .padding(.vertical, 8)
-            }
-            .frame(maxHeight: 250) // Limitar la altura de la lista
-            
-            // --- Botones de Acción ---
-            HStack(spacing: 15) {
-                // ⭐️ Botón CANCELAR / REINTENTAR
-                Button(communicator.isScanning ? "CANCELAR" : "REINTENTAR ESCANEO") {
-                    if communicator.isScanning {
-                        stopScanning()
-                    } else {
-                        startScanning()
-                    }
-                }
-                .buttonStyle(DragonBotButtonStyle(color: communicator.isScanning ? DragonBotTheme.error : DragonBotTheme.secondary))
                 
                 // Botón CERRAR
-                Button("CERRAR") {
+                Button(action: {
                     stopScanning()
                     onDismiss()
+                }) {
+                    Text("CERRAR")
+                        .font(.system(size: 12, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                        .frame(width: 100)  // Ancho fijo para el botón cerrar
+                        .frame(height: 45)  // Altura fija
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(8)
                 }
-                .buttonStyle(DragonBotButtonStyle(color: DragonBotTheme.tertiary))
             }
         }
         .padding(20)
-        .background(DragonBotTheme.background)
-        .cornerRadius(15)
-        .shadow(color: DragonBotTheme.primary.opacity(0.5), radius: 10)
+        .background(Color.black.opacity(0.4))
+    }
+    
+    // MARK: - Fila de Dispositivo
+    struct DeviceRow: View {
+        let device: DeviceData
         
-        // ⭐️ Efecto de Ciclo de Vida (similar al DisposableEffect de Compose)
-        .onAppear {
-            // Iniciar escaneo al aparecer la vista
-            communicator.startScan()
-        }
-        .onDisappear {
-            // Detener escaneo al desaparecer la vista
-            communicator.stopScan()
-        }
-    }
-}
-
-// MARK: - Sub-Vista para la Fila del Dispositivo
-
-struct DeviceRow: View {
-    let device: DeviceData
-    
-    var body: some View {
-        HStack {
-            Image(systemName: "b.circle.fill")
-                .foregroundColor(DragonBotTheme.primary)
-            
-            VStack(alignment: .leading) {
-                Text(device.name)
-                    .font(.headline)
-                    .foregroundColor(DragonBotTheme.primary)
-                Text("BLE: \(device.macAddress)")
-                    .font(.caption)
-                    .foregroundColor(DragonBotTheme.onBackground.opacity(0.7))
+        var body: some View {
+            HStack(spacing: 15) {
+                ZStack {
+                    Circle()
+                        .fill(DragonBotTheme.primary.opacity(0.1))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "cpu")
+                        .foregroundColor(DragonBotTheme.primary)
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(device.name.isEmpty ? "UNKNOWN DEVICE" : device.name.uppercased())
+                        .font(.system(size: 14, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                    Text(device.macAddress)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(device.rssi) dBm")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(rssiColor(device.rssi))
+                    
+                    HStack(spacing: 2) {
+                        ForEach(0..<4) { i in
+                            Capsule()
+                                .fill(i < signalBars(device.rssi) ? DragonBotTheme.primary : Color.white.opacity(0.1))
+                                .frame(width: 3, height: CGFloat(i + 1) * 3)
+                        }
+                    }
+                }
             }
-            
-            Spacer()
-            
-            Text("RSSI: \(device.rssi) dBm")
-                .font(.caption2)
-                .foregroundColor(DragonBotTheme.secondary)
+            .padding(12)
+            .background(Color.white.opacity(0.03))
+            .cornerRadius(12)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.05), lineWidth: 1))
         }
-        .padding(10)
-        .background(DragonBotTheme.darkBlack.opacity(0.5))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(DragonBotTheme.tertiary.opacity(0.5), lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - Estilo de Botón Auxiliar
-
-struct DragonBotButtonStyle: ButtonStyle {
-    var color: Color
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.caption.bold())
-            .foregroundColor(DragonBotTheme.surface) // Color de texto negro/oscuro
-            .padding(.horizontal, 15)
-            .padding(.vertical, 10)
-            .background(color)
-            .cornerRadius(8)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+        
+        private func signalBars(_ rssi: Int) -> Int {
+            if rssi > -60 { return 4 }
+            if rssi > -70 { return 3 }
+            if rssi > -80 { return 2 }
+            return 1
+        }
+        
+        private func rssiColor(_ rssi: Int) -> Color {
+            if rssi > -70 { return .green }
+            if rssi > -90 { return .yellow }
+            return .red
+        }
     }
 }
